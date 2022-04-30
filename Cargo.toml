@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "./packages/parser",
+    "./packages/inteprer"
+]
