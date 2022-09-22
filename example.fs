@@ -1,0 +1,115 @@
+
+if 10 != 5 {
+    print("10 is not equal to 5")
+} else if 10 == 5 {
+    print("10 is equal to 5")
+} else {
+    print("10 is not equal to 5")
+}
+
+const foo = () => {
+    return 10
+}
+
+match foo() {
+    10 => print("foo is 10")
+    5 => print("foo() returns 5")
+    _ => print("foo() returns something else")
+}
+
+for i in 0..5 {
+    print(i)
+}
+
+const json = {
+    foo: 10,
+    bar: 5
+}
+
+
+const xml = <div></div>
+
+const bar = (
+    name: string,
+    age: int
+) => {
+    print("Hello " + name)
+}
+
+bar(name = "John", age = 10)
+
+const fetch_something = async () => {
+
+}
+
+const data = await(fetch_something)
+
+const people = [
+    {
+        id: 1,
+        name: "mikko"
+    },
+    {
+        id: 2,
+        name: "john"
+    }
+]
+
+cons sql = select id, name from people where id == 1
+
+for row in sql {
+    print(row.id)
+    print(row.name)
+}
+
+struct Human {
+    name: string = "qwer"
+    age: int = 10
+    favorite_color: string?
+}
+
+Human.constructed = () => {
+    print("{} was constructed", self.name)
+}
+
+Human.destroyed = () => {
+    print("{} was destroyed", self.name)
+}
+
+Human.greet = () => {
+    this.say_hello()
+}
+
+
+const new_human = Human { }
+
+new_human.greet()
+
+
+import math
+
+math.sin(10)
+
+type Reader {
+    read: () => string
+}
+
+type Writer {
+    write: () => void
+}
+
+mod io {
+    export const copy = (src: Reader, dst: Writer) => {
+        print("copy")
+    }
+}
+
+use io::copy
+
+enum Status {
+    Ok: Human,
+    Error {
+        code: int
+        message: string
+    }
+}

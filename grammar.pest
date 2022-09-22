@@ -1,0 +1,68 @@
+
+number = @{ (ASCII_DIGIT)+ }
+string = { ASCII_ALPHANUMERIC* }
+string_literal = { "\"" ~ string ~ "\"" }
+identifier = @{ ASCII_ALPHANUMERIC+ }
+
+WHITESPACE = _{ " " | NEWLINE }
+COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ ANY* }
+
+plus = { "+" } 
+minus = { "-" }
+multi = { "*" }
+divide = { "/" }
+
+logical_and = { "&&" }
+logical_or = { "||" }
+logical_eq = { "==" }
+logical_smaller = { "<" }
+logical_bigger = { ">" }
+logical_smaller_eq = { "<=" }
+logical_bigger_eq = { ">=" }
+logical_not_eq = { "!=" }
+
+factor = { 
+    "(" ~ expr ~ ")" | 
+    number |
+    truth |
+    identifier | 
+    string_literal
+}
+
+term = { factor ~ ((multi | divide) ~ factor)* }
+expr = { 
+    term ~ ((plus | minus) ~ term)* ~ 
+    ((
+        logical_and | 
+        logical_or | 
+        logical_eq | 
+        logical_smaller_eq |
+        logical_bigger_eq |
+        logical_smaller | 
+        logical_bigger |
+        logical_not_eq |
+        is |
+        not
+    ) ~ expr)? 
+}
+
+match_case = { "case" ~ expr ~ ":" ~ expr ~ ";" }
+
+if_expr = { "if" ~ expr ~ "{" ~ stmt ~ "}" }
+while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
+for_expr = { "for" ~ "(" ~ expr ~ ";" ~ expr ~ ";" ~ expr ~ ")" ~ "{" ~ stmt ~ "}" }
+call_expr = { identifier ~ "(" ~ expr ~ ")" }
+match_expr = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
+
+expr = { if_expr | for_expr }
+
+assignment_stmt = { identifier ~ "=" ~ expr }
+use_stmt = { "use" ~ identifier ~ ";" }
+
+
+stmt = {
+    expr |
+    assignment_stmt
+}
+
+stmts = { stmt* }

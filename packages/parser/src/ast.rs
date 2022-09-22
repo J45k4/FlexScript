@@ -50,7 +50,6 @@ pub enum AstItem {
     Stmt(Stmt),
     Expr(Expr),
     CodeFile(CodeFile),
-    CodeFileItem(CodeFileItem)
 }
 
 #[derive(Debug, PartialEq)]
