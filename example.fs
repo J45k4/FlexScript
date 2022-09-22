@@ -69,15 +69,15 @@ struct Human {
 }
 
 Human.constructed = () => {
-    print("{} was constructed", self.name)
+    print("{} was constructed", this.name)
 }
 
 Human.destroyed = () => {
-    print("{} was destroyed", self.name)
+    print("{} was destroyed", this.name)
 }
 
 Human.greet = () => {
-    this.say_hello()
+    print("Hello, my name is {} and I'm {} years old", this.name, this.age)
 }
 
 

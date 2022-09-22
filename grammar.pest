@@ -21,10 +21,18 @@ logical_smaller_eq = { "<=" }
 logical_bigger_eq = { ">=" }
 logical_not_eq = { "!=" }
 
+true_bool = { "true" }
+false_bool = { "false" }
+
+bool_lit = { 
+    true_bool | 
+    false_bool
+}
+
 factor = { 
     "(" ~ expr ~ ")" | 
     number |
-    truth |
+    bool_lit |
     identifier | 
     string_literal
 }
@@ -34,7 +42,7 @@ while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
 for_expr = { "for" ~ expr ~ "{" ~ stmts ~ "}" }
 call_expr = { identifier ~ "(" ~ expr ~ ")" }
 match_expr = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
-object_expr = { "{" ~ identifier ~ ":" ~ expr "}" }
+object_expr = { "{" ~ identifier ~ ":" ~ expr ~ "}" }
 
 term = { factor ~ ((multi | divide) ~ factor)* }
 expr = { 
@@ -47,9 +55,7 @@ expr = {
         logical_bigger_eq |
         logical_smaller | 
         logical_bigger |
-        logical_not_eq |
-        is |
-        not
+        logical_not_eq
     ) ~ expr)? |
     if_expr |
     while_expr |
@@ -78,7 +84,6 @@ type_stmt = { "type" ~ identifier ~ type_def }
 return_stmt = { "return" ~ expr }
 break_stmt = { "break" }
 continue_stmt = { "continue" }
-assignment_stmt = { identifier ~ "=" ~ expr }
 
 stmt = {
     expr |
