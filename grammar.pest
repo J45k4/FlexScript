@@ -29,6 +29,13 @@ factor = {
     string_literal
 }
 
+if_expr = { "if" ~ expr ~ "{" ~ stmt ~ "}" }
+while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
+for_expr = { "for" ~ expr ~ "{" ~ stmts ~ "}" }
+call_expr = { identifier ~ "(" ~ expr ~ ")" }
+match_expr = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
+object_expr = { "{" ~ identifier ~ ":" ~ expr "}" }
+
 term = { factor ~ ((multi | divide) ~ factor)* }
 expr = { 
     term ~ ((plus | minus) ~ term)* ~ 
@@ -43,26 +50,45 @@ expr = {
         logical_not_eq |
         is |
         not
-    ) ~ expr)? 
+    ) ~ expr)? |
+    if_expr |
+    while_expr |
+    for_expr |
+    call_expr |
+    match_expr |
+    object_expr
 }
+
+int_type = { "int" }
+bool_type = { "bool" }
+string_type = { "string" }
+object_type = { "{" ~ type_field ~ "}" }
+
+type_def = { int_type | bool_type | string_type | object_type }
 
 match_case = { "case" ~ expr ~ ":" ~ expr ~ ";" }
 
-if_expr = { "if" ~ expr ~ "{" ~ stmt ~ "}" }
-while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
-for_expr = { "for" ~ "(" ~ expr ~ ";" ~ expr ~ ";" ~ expr ~ ")" ~ "{" ~ stmt ~ "}" }
-call_expr = { identifier ~ "(" ~ expr ~ ")" }
-match_expr = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
-
-expr = { if_expr | for_expr }
+type_field = { identifier ~ ":" ~ type_def }
 
 assignment_stmt = { identifier ~ "=" ~ expr }
-use_stmt = { "use" ~ identifier ~ ";" }
-
+use_stmt = { "use" ~ identifier }
+enum_stmt = { "enum" ~ identifier ~ "{" ~ identifier ~ "}" }
+struct_stmt = { "struct" ~ identifier ~ "{" ~ identifier ~ "}" }
+type_stmt = { "type" ~ identifier ~ type_def }
+return_stmt = { "return" ~ expr }
+break_stmt = { "break" }
+continue_stmt = { "continue" }
+assignment_stmt = { identifier ~ "=" ~ expr }
 
 stmt = {
     expr |
-    assignment_stmt
+    assignment_stmt |
+    use_stmt |
+    enum_stmt |
+    struct_stmt |
+    type_stmt
 }
 
 stmts = { stmt* }
+
+file = { SOI ~  stmts? ~ EOI }
