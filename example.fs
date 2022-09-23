@@ -113,3 +113,9 @@ enum Status {
         message: string
     }
 }
+
+type Person {
+    name string @db(type=varchar(60))
+    age int @db(type=int)
+    ballBasket @db(name=ball_basket)
+}
