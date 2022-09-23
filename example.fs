@@ -107,7 +107,7 @@ mod io {
 use io::copy
 
 enum Status {
-    Ok: Human,
+    Ok(Human),
     Error {
         code: int
         message: string

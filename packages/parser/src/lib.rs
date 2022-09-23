@@ -3,11 +3,16 @@ use pest::Parser;
 
 mod ast;
 mod parser_gen;
+mod parser_tests;
+
+pub use ast::*;
 
 pub struct FlexscriptParser;
 
-pub fn parse_text(input: &str) -> anyhow::Result<()> {
+pub fn parse_text(input: &str) -> anyhow::Result<AST> {
     let pairs = FlexscriptParser::parse(Rule::file, input)?;
 
-    Ok(())
+    Ok(AST { 
+        stmts:vec![] 
+    })
 }

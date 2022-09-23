@@ -107,6 +107,10 @@ pub enum Stmt {
 
 type Stmts = Vec<Stmt>;
 
+pub struct AST {
+    pub stmts: Stmts
+}
+
 // #[derive(Debug, PartialEq)]
 // pub struct FunStmt {
 //     pub name: String

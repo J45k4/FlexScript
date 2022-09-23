@@ -37,15 +37,14 @@ factor = {
     string_literal
 }
 
-if_expr = { "if" ~ expr ~ "{" ~ stmt ~ "}" }
 while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
-for_expr = { "for" ~ expr ~ "{" ~ stmts ~ "}" }
+for_expr = { "for" ~ (identifier ~ "in" ~ ( range_expr | expr ))? ~ "{" ~ "}" }
 call_expr = { identifier ~ "(" ~ expr ~ ")" }
-match_expr = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
-object_expr = { "{" ~ identifier ~ ":" ~ expr ~ "}" }
+
+range_expr = { expr? ~ ".." ~ expr? }
 
 term = { factor ~ ((multi | divide) ~ factor)* }
-expr = { 
+expr = {
     term ~ ((plus | minus) ~ term)* ~ 
     ((
         logical_and | 
@@ -57,12 +56,8 @@ expr = {
         logical_bigger |
         logical_not_eq
     ) ~ expr)? |
-    if_expr |
     while_expr |
-    for_expr |
-    call_expr |
-    match_expr |
-    object_expr
+    call_expr
 }
 
 int_type = { "int" }
@@ -72,26 +67,66 @@ object_type = { "{" ~ type_field ~ "}" }
 
 type_def = { int_type | bool_type | string_type | object_type }
 
-match_case = { "case" ~ expr ~ ":" ~ expr ~ ";" }
+field_decorator = { "@" ~ identifier ~ "(" ~ expr ~ ")" }
 
-type_field = { identifier ~ ":" ~ type_def }
-
+const_stmt = { "const" ~ identifier ~ type_def? ~ "=" ~ stmt }
+let_stmt = { "let" ~ identifier ~ type_def ~ "=" ~ expr }
 assignment_stmt = { identifier ~ "=" ~ expr }
 use_stmt = { "use" ~ identifier }
-enum_stmt = { "enum" ~ identifier ~ "{" ~ identifier ~ "}" }
 struct_stmt = { "struct" ~ identifier ~ "{" ~ identifier ~ "}" }
-type_stmt = { "type" ~ identifier ~ type_def }
+
+enum_field_object_field = { identifier ~ type_def }
+enum_field_object = { "{" ~ enum_field_object_field* ~ "}" }
+enum_field_tuple = { "(" ~ identifier* ~ ")" }
+enum_field = { identifier ~ (enum_field_object | enum_field_tuple)? }
+enum_stmt = { "enum" ~ identifier ~ "{" ~ enum_field* ~ "}" }
+
+type_field = { identifier ~ type_def ~ field_decorator* }
+type_object = { "{" ~ type_field* ~ "}" }
+type_simple = { type_def }
+type_stmt = { "type" ~ identifier ~ (type_object | type_simple) }
+
 return_stmt = { "return" ~ expr }
 break_stmt = { "break" }
 continue_stmt = { "continue" }
 
+function_arg = { identifier ~ type_def? }
+function_args = { function_arg ~ ("," ~ function_arg)* }
+function_stmt = { "(" ~ function_args? ~ ")" ~ "=>" ~ "{" ~ stmts? ~ "}" }
+
+object_stmt_field = { identifier ~ ":" ~ expr }
+object_stmt = { "{" ~ object_stmt_field* ~ "}" }
+
+if_branch = { "if" ~ expr ~ "{" ~ stmts? ~ "}" }
+else_if_branch = { "else if" ~ expr ~ "{" ~ stmts? ~ "}" }
+else_branch = { "else" ~ "{" ~ stmts? ~ "}" }
+if_stmt = { if_branch ~ else_if_branch* ~ else_branch? }
+
+match_condition = { expr ~ "|" ~ match_condition* }
+match_case = { ( "_" | match_condition ) ~ "=>" ~ stmt }
+match_stmt = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
+
+block_stmt = { "{" ~ stmts? ~ "}" }
+
 stmt = {
-    expr |
+    for_expr |
+    const_stmt |
+    let_stmt |
     assignment_stmt |
+    if_stmt |
     use_stmt |
     enum_stmt |
     struct_stmt |
-    type_stmt
+    type_stmt |
+    return_stmt |
+    break_stmt |
+    continue_stmt |
+    function_stmt |
+    range_expr |
+    object_stmt |
+    match_stmt |
+    block_stmt |
+    expr
 }
 
 stmts = { stmt* }
