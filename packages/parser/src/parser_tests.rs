@@ -1,25 +1,74 @@
 use crate::parse_text;
 
+#[cfg(test)]
+mod assingment_tests {
+    use super::*;
 
-#[test]
-fn test_const_assingment() {
-    let code = "const a int = 5";
-
-    let ast = parse_text(code).unwrap();
+    #[test]
+    fn test_const_assingment() {
+        let code = "const a int = 5";
+    
+        let ast = parse_text(code).unwrap();
+    }
+    
+    #[test]
+    fn test_let_assigment() {
+        let code = "let a int = 5";
+    
+        let ast = parse_text(code).unwrap();
+    }
+    
+    #[test]
+    fn test_assigment() {
+        let code = "a = 5";
+    
+        let ast = parse_text(code).unwrap();
+    }
 }
 
-#[test]
-fn test_let_assigment() {
-    let code = "let a int = 5";
-
-    let ast = parse_text(code).unwrap();
+#[cfg(test)]
+mod identifier_tests {
+    use super::*;
+    
+    #[test]
+    fn test_identifier() {
+        let code = "const makkara_perunat = 5";
+    
+        let ast = parse_text(code).unwrap();
+    }
 }
 
-#[test]
-fn test_assigment() {
-    let code = "a = 5";
+#[cfg(test)]
+mod literal_tests {
+    use super::*;
 
-    let ast = parse_text(code).unwrap();
+    #[test]
+    fn test_int_literal() {
+        let code = "5";
+
+        let ast = super::parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_float_literal() {
+        let code = "5.5";
+
+        let ast = super::parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_string_literal() {
+        let code = r#""hello""#;
+
+        let ast = super::parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_complicated_string_literal() {
+        let code = r#"const a = "foo()""#;
+
+        let ast = super::parse_text(code).unwrap();
+    }
 }
 
 #[test]
@@ -80,12 +129,25 @@ fn test_function_call() {
     let ast = parse_text(code).unwrap();
 }
 
-#[test]
-fn test_define_function() {
-    let code = r#"const foo = () => { }"#;
+#[cfg(test)]
+mod function_tests {
+    use super::*;
 
-    let ast = parse_text(code).unwrap();
+    #[test]
+    fn test_define_function() {
+        let code = r#"const foo = () => { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_async_function() {
+        let code = r#"const foo = async () => { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
 }
+
 
 #[test]
 fn test_object_literal() {
@@ -108,11 +170,23 @@ fn test_scalar_type_stmt() {
     let ast = parse_text(code).unwrap();
 }
 
-#[test]
-fn test_match_unknown() {
-    let code = r#"match a { _ => { } }"#;
+#[cfg(test)]
+mod match_tests {
+    use super::*;
 
-    let ast = parse_text(code).unwrap();
+    #[test]
+    fn test_match_unknown() {
+        let code = r#"match a { _ => { } }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_match_function_unknown() {
+        let code = r#"match foo() { _ => { } }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -150,6 +224,72 @@ mod enum_tests {
     #[test]
     fn test_enum_with_object_variant() {
         let code = r#"enum Person { Bob { name string } }"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod xml_tests {
+    use super::*;
+
+    #[test]
+    fn test_xml() {
+        let code = r#"<div></div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_item() {
+        let code = r#"<div>hello</div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_attribute() {
+        let code = r#"<div class="hello"></div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_variable_child() {
+        let code = r#"<div>{a}</div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_variable_attribute() {
+        let code = r#"<div class={a}></div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_number_attribute() {
+        let code = r#"<div class={5}></div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_xml_with_number_item() {
+        let code = r#"<div>{5}</div>"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod call_tests {
+    use super::*;
+
+    #[test]
+    fn test_call() {
+        let code = r#"foo(5)"#;
 
         let ast = parse_text(code).unwrap();
     }

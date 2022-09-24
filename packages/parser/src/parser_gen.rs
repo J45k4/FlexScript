@@ -3,7 +3,8 @@ use super::FlexscriptParser;
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Rule {
     EOI,
-    number,
+    integer,
+    float,
     string,
     string_literal,
     identifier,
@@ -27,7 +28,6 @@ pub enum Rule {
     factor,
     while_expr,
     for_expr,
-    call_expr,
     range_expr,
     term,
     expr,
@@ -66,6 +66,13 @@ pub enum Rule {
     match_condition,
     match_case,
     match_stmt,
+    xml_atribute,
+    xml_child,
+    xml_stmt,
+    call_args,
+    call_stmt,
+    array_items,
+    array_stmt,
     block_stmt,
     stmt,
     stmts,
@@ -112,16 +119,40 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                 use super::super::Rule;
                 #[inline]
                 #[allow(non_snake_case, unused_variables)]
-                pub fn number(
+                pub fn integer(
                     state: ::std::boxed::Box<::pest::ParserState<Rule>>,
                 ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
                 {
-                    state.rule(Rule::number, |state| {
+                    state.rule(Rule::integer, |state| {
                         state.atomic(::pest::Atomicity::Atomic, |state| {
                             state.sequence(|state| {
                                 self::ASCII_DIGIT(state).and_then(|state| {
                                     state.repeat(|state| self::ASCII_DIGIT(state))
                                 })
+                            })
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn float(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::float, |state| {
+                        state.atomic(::pest::Atomicity::Atomic, |state| {
+                            state.sequence(|state| {
+                                state
+                                    .sequence(|state| {
+                                        self::ASCII_DIGIT(state).and_then(|state| {
+                                            state.repeat(|state| self::ASCII_DIGIT(state))
+                                        })
+                                    })
+                                    .and_then(|state| state.match_string("."))
+                                    .and_then(|state| self::ASCII_DIGIT(state))
+                                    .and_then(|state| {
+                                        state.repeat(|state| self::ASCII_DIGIT(state))
+                                    })
                             })
                         })
                     })
@@ -154,13 +185,16 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                 ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
                 {
                     state.rule(Rule::string_literal, |state| {
-                        state.sequence(|state| {
-                            state
-                                .match_string("\"")
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| self::string(state))
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| state.match_string("\""))
+                        state.atomic(::pest::Atomicity::Atomic, |state| {
+                            state.sequence(|state| {
+                                state
+                                    .match_string("\"")
+                                    .and_then(|state| {
+                                        let strings = ["\""];
+                                        state.skip_until(&strings)
+                                    })
+                                    .and_then(|state| state.match_string("\""))
+                            })
                         })
                     })
                 }
@@ -173,9 +207,14 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                     state.rule(Rule::identifier, |state| {
                         state.atomic(::pest::Atomicity::Atomic, |state| {
                             state.sequence(|state| {
-                                self::ASCII_ALPHANUMERIC(state).and_then(|state| {
-                                    state.repeat(|state| self::ASCII_ALPHANUMERIC(state))
-                                })
+                                self::ASCII_ALPHANUMERIC(state)
+                                    .or_else(|state| state.match_string("_"))
+                                    .and_then(|state| {
+                                        state.repeat(|state| {
+                                            self::ASCII_ALPHANUMERIC(state)
+                                                .or_else(|state| state.match_string("_"))
+                                        })
+                                    })
                             })
                         })
                     })
@@ -363,7 +402,8 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                                     .and_then(|state| super::hidden::skip(state))
                                     .and_then(|state| state.match_string(")"))
                             })
-                            .or_else(|state| self::number(state))
+                            .or_else(|state| self::float(state))
+                            .or_else(|state| self::integer(state))
                             .or_else(|state| self::bool_lit(state))
                             .or_else(|state| self::identifier(state))
                             .or_else(|state| self::string_literal(state))
@@ -419,24 +459,6 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                                 .and_then(|state| state.match_string("{"))
                                 .and_then(|state| super::hidden::skip(state))
                                 .and_then(|state| state.match_string("}"))
-                        })
-                    })
-                }
-                #[inline]
-                #[allow(non_snake_case, unused_variables)]
-                pub fn call_expr(
-                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
-                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
-                {
-                    state.rule(Rule::call_expr, |state| {
-                        state.sequence(|state| {
-                            self::identifier(state)
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| state.match_string("("))
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| self::expr(state))
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| state.match_string(")"))
                         })
                     })
                 }
@@ -515,7 +537,7 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                     state: ::std::boxed::Box<::pest::ParserState<Rule>>,
                 ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
                 {
-                    state . rule (Rule :: expr , | state | { state . sequence (| state | { self :: term (state) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { state . sequence (| state | { state . optional (| state | { state . sequence (| state | { self :: plus (state) . or_else (| state | { self :: minus (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: term (state) }) }) . and_then (| state | { state . repeat (| state | { state . sequence (| state | { super :: hidden :: skip (state) . and_then (| state | { state . sequence (| state | { self :: plus (state) . or_else (| state | { self :: minus (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: term (state) }) }) }) }) }) }) }) }) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { state . optional (| state | { state . sequence (| state | { self :: logical_and (state) . or_else (| state | { self :: logical_or (state) }) . or_else (| state | { self :: logical_eq (state) }) . or_else (| state | { self :: logical_smaller_eq (state) }) . or_else (| state | { self :: logical_bigger_eq (state) }) . or_else (| state | { self :: logical_smaller (state) }) . or_else (| state | { self :: logical_bigger (state) }) . or_else (| state | { self :: logical_not_eq (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: expr (state) }) }) }) }) }) . or_else (| state | { self :: while_expr (state) }) . or_else (| state | { self :: call_expr (state) }) })
+                    state . rule (Rule :: expr , | state | { state . sequence (| state | { self :: term (state) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { state . sequence (| state | { state . optional (| state | { state . sequence (| state | { self :: plus (state) . or_else (| state | { self :: minus (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: term (state) }) }) . and_then (| state | { state . repeat (| state | { state . sequence (| state | { super :: hidden :: skip (state) . and_then (| state | { state . sequence (| state | { self :: plus (state) . or_else (| state | { self :: minus (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: term (state) }) }) }) }) }) }) }) }) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { state . optional (| state | { state . sequence (| state | { self :: logical_and (state) . or_else (| state | { self :: logical_or (state) }) . or_else (| state | { self :: logical_eq (state) }) . or_else (| state | { self :: logical_smaller_eq (state) }) . or_else (| state | { self :: logical_bigger_eq (state) }) . or_else (| state | { self :: logical_smaller (state) }) . or_else (| state | { self :: logical_bigger (state) }) . or_else (| state | { self :: logical_not_eq (state) }) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: expr (state) }) }) }) }) }) . or_else (| state | { self :: while_expr (state) }) })
                 }
                 #[inline]
                 #[allow(non_snake_case, unused_variables)]
@@ -1013,7 +1035,9 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                     state.rule(Rule::function_stmt, |state| {
                         state.sequence(|state| {
                             state
-                                .match_string("(")
+                                .optional(|state| state.match_string("async"))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string("("))
                                 .and_then(|state| super::hidden::skip(state))
                                 .and_then(|state| {
                                     state.optional(|state| self::function_args(state))
@@ -1175,29 +1199,7 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                     state: ::std::boxed::Box<::pest::ParserState<Rule>>,
                 ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
                 {
-                    state.rule(Rule::match_condition, |state| {
-                        state.sequence(|state| {
-                            self::expr(state)
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| state.match_string("|"))
-                                .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| {
-                                    state.sequence(|state| {
-                                        state.optional(|state| {
-                                            self::match_condition(state).and_then(|state| {
-                                                state.repeat(|state| {
-                                                    state.sequence(|state| {
-                                                        super::hidden::skip(state).and_then(
-                                                            |state| self::match_condition(state),
-                                                        )
-                                                    })
-                                                })
-                                            })
-                                        })
-                                    })
-                                })
-                        })
-                    })
+                    state . rule (Rule :: match_condition , | state | { state . sequence (| state | { self :: expr (state) . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { state . sequence (| state | { state . optional (| state | { state . sequence (| state | { state . match_string ("|") . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: match_condition (state) }) }) . and_then (| state | { state . repeat (| state | { state . sequence (| state | { super :: hidden :: skip (state) . and_then (| state | { state . sequence (| state | { state . match_string ("|") . and_then (| state | { super :: hidden :: skip (state) }) . and_then (| state | { self :: match_condition (state) }) }) }) }) }) }) }) }) }) }) })
                 }
                 #[inline]
                 #[allow(non_snake_case, unused_variables)]
@@ -1228,13 +1230,279 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                             state
                                 .match_string("match")
                                 .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| self::expr(state))
+                                .and_then(|state| self::stmt(state))
                                 .and_then(|state| super::hidden::skip(state))
                                 .and_then(|state| state.match_string("{"))
                                 .and_then(|state| super::hidden::skip(state))
-                                .and_then(|state| self::match_case(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            self::match_case(state).and_then(|state| {
+                                                state.repeat(|state| {
+                                                    state.sequence(|state| {
+                                                        super::hidden::skip(state).and_then(
+                                                            |state| self::match_case(state),
+                                                        )
+                                                    })
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
                                 .and_then(|state| super::hidden::skip(state))
                                 .and_then(|state| state.match_string("}"))
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn xml_atribute(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::xml_atribute, |state| {
+                        state.sequence(|state| {
+                            self::identifier(state)
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string("="))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    self::string_literal(state).or_else(|state| {
+                                        state.sequence(|state| {
+                                            state
+                                                .match_string("{")
+                                                .and_then(|state| super::hidden::skip(state))
+                                                .and_then(|state| self::expr(state))
+                                                .and_then(|state| super::hidden::skip(state))
+                                                .and_then(|state| state.match_string("}"))
+                                        })
+                                    })
+                                })
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn xml_child(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::xml_child, |state| {
+                        self::xml_stmt(state)
+                            .or_else(|state| self::identifier(state))
+                            .or_else(|state| {
+                                state.sequence(|state| {
+                                    state
+                                        .match_string("{")
+                                        .and_then(|state| super::hidden::skip(state))
+                                        .and_then(|state| self::identifier(state))
+                                        .and_then(|state| super::hidden::skip(state))
+                                        .and_then(|state| state.match_string("}"))
+                                })
+                            })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn xml_stmt(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::xml_stmt, |state| {
+                        state.sequence(|state| {
+                            state
+                                .match_string("<")
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| self::identifier(state))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            self::xml_atribute(state).and_then(|state| {
+                                                state.repeat(|state| {
+                                                    state.sequence(|state| {
+                                                        super::hidden::skip(state).and_then(
+                                                            |state| self::xml_atribute(state),
+                                                        )
+                                                    })
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string(">"))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            self::xml_child(state).and_then(|state| {
+                                                state.repeat(|state| {
+                                                    state.sequence(|state| {
+                                                        super::hidden::skip(state).and_then(
+                                                            |state| self::xml_child(state),
+                                                        )
+                                                    })
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string("</"))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| self::identifier(state))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string(">"))
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn call_args(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::call_args, |state| {
+                        state.sequence(|state| {
+                            self::stmt(state)
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            state
+                                                .sequence(|state| {
+                                                    state
+                                                        .match_string(",")
+                                                        .and_then(|state| {
+                                                            super::hidden::skip(state)
+                                                        })
+                                                        .and_then(|state| self::stmt(state))
+                                                })
+                                                .and_then(|state| {
+                                                    state.repeat(|state| {
+                                                        state.sequence(|state| {
+                                                            super::hidden::skip(state).and_then(
+                                                                |state| {
+                                                                    state.sequence(|state| {
+                                                                        state
+                                                                            .match_string(",")
+                                                                            .and_then(|state| {
+                                                                                super::hidden::skip(
+                                                                                    state,
+                                                                                )
+                                                                            })
+                                                                            .and_then(|state| {
+                                                                                self::stmt(state)
+                                                                            })
+                                                                    })
+                                                                },
+                                                            )
+                                                        })
+                                                    })
+                                                })
+                                        })
+                                    })
+                                })
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn call_stmt(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::call_stmt, |state| {
+                        state.sequence(|state| {
+                            self::identifier(state)
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string("("))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.optional(|state| self::call_args(state)))
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string(")"))
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn array_items(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::array_items, |state| {
+                        state.sequence(|state| {
+                            self::stmt(state)
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            state
+                                                .sequence(|state| {
+                                                    state
+                                                        .match_string(",")
+                                                        .and_then(|state| {
+                                                            super::hidden::skip(state)
+                                                        })
+                                                        .and_then(|state| self::stmt(state))
+                                                })
+                                                .and_then(|state| {
+                                                    state.repeat(|state| {
+                                                        state.sequence(|state| {
+                                                            super::hidden::skip(state).and_then(
+                                                                |state| {
+                                                                    state.sequence(|state| {
+                                                                        state
+                                                                            .match_string(",")
+                                                                            .and_then(|state| {
+                                                                                super::hidden::skip(
+                                                                                    state,
+                                                                                )
+                                                                            })
+                                                                            .and_then(|state| {
+                                                                                self::stmt(state)
+                                                                            })
+                                                                    })
+                                                                },
+                                                            )
+                                                        })
+                                                    })
+                                                })
+                                        })
+                                    })
+                                })
+                        })
+                    })
+                }
+                #[inline]
+                #[allow(non_snake_case, unused_variables)]
+                pub fn array_stmt(
+                    state: ::std::boxed::Box<::pest::ParserState<Rule>>,
+                ) -> ::pest::ParseResult<::std::boxed::Box<::pest::ParserState<Rule>>>
+                {
+                    state.rule(Rule::array_stmt, |state| {
+                        state.sequence(|state| {
+                            state
+                                .match_string("[")
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| {
+                                    state.sequence(|state| {
+                                        state.optional(|state| {
+                                            self::array_items(state).and_then(|state| {
+                                                state.repeat(|state| {
+                                                    state.sequence(|state| {
+                                                        super::hidden::skip(state).and_then(
+                                                            |state| self::array_items(state),
+                                                        )
+                                                    })
+                                                })
+                                            })
+                                        })
+                                    })
+                                })
+                                .and_then(|state| super::hidden::skip(state))
+                                .and_then(|state| state.match_string("]"))
                         })
                     })
                 }
@@ -1279,6 +1547,8 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
                             .or_else(|state| self::object_stmt(state))
                             .or_else(|state| self::match_stmt(state))
                             .or_else(|state| self::block_stmt(state))
+                            .or_else(|state| self::xml_stmt(state))
+                            .or_else(|state| self::call_stmt(state))
                             .or_else(|state| self::expr(state))
                     })
                 }
@@ -1377,7 +1647,8 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
             pub use self::visible::*;
         }
         ::pest::state(input, |state| match rule {
-            Rule::number => rules::number(state),
+            Rule::integer => rules::integer(state),
+            Rule::float => rules::float(state),
             Rule::string => rules::string(state),
             Rule::string_literal => rules::string_literal(state),
             Rule::identifier => rules::identifier(state),
@@ -1401,7 +1672,6 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
             Rule::factor => rules::factor(state),
             Rule::while_expr => rules::while_expr(state),
             Rule::for_expr => rules::for_expr(state),
-            Rule::call_expr => rules::call_expr(state),
             Rule::range_expr => rules::range_expr(state),
             Rule::term => rules::term(state),
             Rule::expr => rules::expr(state),
@@ -1440,6 +1710,13 @@ impl ::pest::Parser<Rule> for FlexscriptParser {
             Rule::match_condition => rules::match_condition(state),
             Rule::match_case => rules::match_case(state),
             Rule::match_stmt => rules::match_stmt(state),
+            Rule::xml_atribute => rules::xml_atribute(state),
+            Rule::xml_child => rules::xml_child(state),
+            Rule::xml_stmt => rules::xml_stmt(state),
+            Rule::call_args => rules::call_args(state),
+            Rule::call_stmt => rules::call_stmt(state),
+            Rule::array_items => rules::array_items(state),
+            Rule::array_stmt => rules::array_stmt(state),
             Rule::block_stmt => rules::block_stmt(state),
             Rule::stmt => rules::stmt(state),
             Rule::stmts => rules::stmts(state),

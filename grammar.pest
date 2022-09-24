@@ -1,8 +1,9 @@
 
-number = @{ (ASCII_DIGIT)+ }
+integer = @{ (ASCII_DIGIT)+ }
+float = @{ (ASCII_DIGIT)+ ~ "." ~ (ASCII_DIGIT)+ }
 string = { ASCII_ALPHANUMERIC* }
-string_literal = { "\"" ~ string ~ "\"" }
-identifier = @{ ASCII_ALPHANUMERIC+ }
+string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+identifier = @{ (ASCII_ALPHANUMERIC | "_" )+ }
 
 WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ ANY* }
@@ -31,7 +32,8 @@ bool_lit = {
 
 factor = { 
     "(" ~ expr ~ ")" | 
-    number |
+    float |
+    integer |
     bool_lit |
     identifier | 
     string_literal
@@ -39,7 +41,7 @@ factor = {
 
 while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
 for_expr = { "for" ~ (identifier ~ "in" ~ ( range_expr | expr ))? ~ "{" ~ "}" }
-call_expr = { identifier ~ "(" ~ expr ~ ")" }
+
 
 range_expr = { expr? ~ ".." ~ expr? }
 
@@ -56,8 +58,7 @@ expr = {
         logical_bigger |
         logical_not_eq
     ) ~ expr)? |
-    while_expr |
-    call_expr
+    while_expr
 }
 
 int_type = { "int" }
@@ -92,7 +93,7 @@ continue_stmt = { "continue" }
 
 function_arg = { identifier ~ type_def? }
 function_args = { function_arg ~ ("," ~ function_arg)* }
-function_stmt = { "(" ~ function_args? ~ ")" ~ "=>" ~ "{" ~ stmts? ~ "}" }
+function_stmt = { "async"? ~ "(" ~ function_args? ~ ")" ~ "=>" ~ "{" ~ stmts? ~ "}" }
 
 object_stmt_field = { identifier ~ ":" ~ expr }
 object_stmt = { "{" ~ object_stmt_field* ~ "}" }
@@ -102,9 +103,19 @@ else_if_branch = { "else if" ~ expr ~ "{" ~ stmts? ~ "}" }
 else_branch = { "else" ~ "{" ~ stmts? ~ "}" }
 if_stmt = { if_branch ~ else_if_branch* ~ else_branch? }
 
-match_condition = { expr ~ "|" ~ match_condition* }
+match_condition = { expr ~ ( "|" ~ match_condition )* }
 match_case = { ( "_" | match_condition ) ~ "=>" ~ stmt }
-match_stmt = { "match" ~ expr ~ "{" ~ match_case ~ "}" }
+match_stmt = { "match" ~ stmt ~ "{" ~ match_case* ~ "}" }
+
+xml_atribute = { identifier ~ "=" ~ ( string_literal | "{" ~ expr ~ "}" ) }
+xml_child = { xml_stmt | identifier | ( "{" ~ identifier ~ "}" ) }
+xml_stmt = { ("<" ~ identifier ~ xml_atribute* ~ ">" ~ xml_child* ~ "</" ~ identifier ~ ">") }
+
+call_args = { stmt ~ ("," ~ stmt)* }
+call_stmt = { identifier ~ "(" ~ call_args? ~ ")" }
+
+array_items = { stmt ~ ("," ~ stmt)* }
+array_stmt = { "[" ~ array_items* ~ "]" }
 
 block_stmt = { "{" ~ stmts? ~ "}" }
 
@@ -126,6 +137,8 @@ stmt = {
     object_stmt |
     match_stmt |
     block_stmt |
+    xml_stmt |
+    call_stmt |
     expr
 }
 

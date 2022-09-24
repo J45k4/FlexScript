@@ -22,7 +22,7 @@ for i in 0..5 {
 }
 
 const json = {
-    foo: 10,
+    foo: 10
     bar: 5
 }
 
@@ -30,8 +30,8 @@ const json = {
 const xml = <div></div>
 
 const bar = (
-    name: string,
-    age: int
+    name string,
+    age int
 ) => {
     print("Hello " + name)
 }
@@ -84,11 +84,6 @@ Human.greet = () => {
 const new_human = Human { }
 
 new_human.greet()
-
-
-import math
-
-math.sin(10)
 
 type Reader {
     read: () => string

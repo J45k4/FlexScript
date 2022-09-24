@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "./packages/flexscript",
     "./packages/parser",
     "./packages/inteprer"
 ]
