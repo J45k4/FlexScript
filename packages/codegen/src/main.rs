@@ -6,7 +6,7 @@ use quote::quote;
 fn main() {
     let t = quote! {
         #[derive(Parser)]
-        #[grammar = "../../grammar.pest"]
+        #[grammar = "grammar.pest"]
         pub struct FlexscriptParser;  
     };
 
@@ -17,10 +17,10 @@ fn main() {
     t = "use super::FlexscriptParser;".to_string() + &t;
 
     std::fs::write(
-        "./src/parser_gen.rs", 
+        "./packages/parser/src/parser_gen.rs", 
         t.to_string().as_bytes()).unwrap();
 
     Command::new("rustfmt")
-        .arg("./src/parser_gen.rs")
+        .arg("./packages/parser/src/parser_gen.rs")
         .output().unwrap();
 }

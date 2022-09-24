@@ -46,16 +46,16 @@ const data = await(fetch_something)
 
 const people = [
     {
-        id: 1,
+        id: 1
         name: "mikko"
     },
     {
-        id: 2,
+        id: 2
         name: "john"
     }
 ]
 
-cons sql = select id, name from people where id == 1
+const sql = select id, name from people where id == 1
 
 for row in sql {
     print(row.id)

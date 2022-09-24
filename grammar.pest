@@ -3,6 +3,9 @@ integer = @{ (ASCII_DIGIT)+ }
 float = @{ (ASCII_DIGIT)+ ~ "." ~ (ASCII_DIGIT)+ }
 string = { ASCII_ALPHANUMERIC* }
 string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+
+method_call = { "." ~ identifier ~ "(" ~ (stmt ~ ("," ~ stmt)*)? ~ ")" }
+member_access = { "." ~ identifier }
 identifier = @{ (ASCII_ALPHANUMERIC | "_" )+ }
 
 WHITESPACE = _{ " " | NEWLINE }
@@ -117,6 +120,16 @@ call_stmt = { identifier ~ "(" ~ call_args? ~ ")" }
 array_items = { stmt ~ ("," ~ stmt)* }
 array_stmt = { "[" ~ array_items* ~ "]" }
 
+
+sql_select_parameters = { identifier ~ ("," ~ identifier)? }
+sql_from = { "from" ~ identifier ~ ("as" ~ identifier)? }
+sql_where_condition = { identifier ~ "==" ~ expr ~ ( ( "and" | "or" ) ~ sql_where_condition )? }
+sql_where = { "where" ~ identifier ~ "==" ~ stmt }
+sql_select = { "select" ~ sql_select_parameters ~ sql_from ~ sql_where }
+sql_insert = { "insert" ~ "into" ~ identifier ~ "(" ~ identifier ~ ")" ~ "values" ~ "(" ~ stmt ~ ")" }
+sql_update = { "update" ~ identifier ~ "set" ~ identifier ~ "=" ~ stmt ~ sql_where }
+sql_stmt = { sql_select | sql_insert | sql_update }
+
 block_stmt = { "{" ~ stmts? ~ "}" }
 
 stmt = {
@@ -139,8 +152,14 @@ stmt = {
     block_stmt |
     xml_stmt |
     call_stmt |
+    array_stmt |
+    sql_stmt |
     expr
 }
+
+// stmt = {
+//     sql_stmt
+// }
 
 stmts = { stmt* }
 

@@ -294,3 +294,60 @@ mod call_tests {
         let ast = parse_text(code).unwrap();
     }
 }
+
+#[cfg(test)]
+mod array_tests {
+    use super::*;
+
+    #[test]
+    fn test_array() {
+        let code = r#"[1, 2, 3]"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_array_with_variable() {
+        let code = r#"[1, 2, a]"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_empty_array() {
+        let code = r#"[]"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod sql_tests {
+    use super::*;
+
+    #[test]
+    fn test_sql() {
+        let code = r#"const sql = select id, name from people where id == 1"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod property_access_tests {
+    use super::*;
+
+    #[test]
+    fn test_property_access() {
+        let code = r#"a.b"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_property_access_with_function_call() {
+        let code = r#"a.b(5)"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+}

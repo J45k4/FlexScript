@@ -3,5 +3,6 @@
 members = [
     "./packages/flexscript",
     "./packages/parser",
-    "./packages/inteprer"
+    "./packages/inteprer",
+    "./packages/codegen",
 ]
