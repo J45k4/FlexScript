@@ -20,7 +20,7 @@ fn main() {
         "./packages/parser/src/parser_gen.rs", 
         t.to_string().as_bytes()).unwrap();
 
-    Command::new("rustfmt")
-        .arg("./packages/parser/src/parser_gen.rs")
-        .output().unwrap();
+    // Command::new("rustfmt")
+    //     .arg("./packages/parser/src/parser_gen.rs")
+    //     .output().unwrap();
 }

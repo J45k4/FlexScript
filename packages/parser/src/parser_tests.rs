@@ -71,62 +71,65 @@ mod literal_tests {
     }
 }
 
-#[test]
-fn test_if() {
-    let code = r#"
-if a == 5 { 
+#[cfg(test)]
+mod if_tests {
+    use super::*;
 
-}"#;
+    #[test]
+    fn test_if() {
+        let code = r#"
+    if a == 5 { 
+    
+    }"#;
+    }
+    
+    #[test]
+    fn test_if_else() {
+        let code = r#"
+    if a == 5 { } else { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
+    
+    #[test]
+    fn test_if_else_if_else() {
+        let code = r#"
+    if a == 5 { 
+    
+    } else if a == 6 {
+    
+    } else {
+    
+    }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }    
 }
 
-#[test]
-fn test_if_else() {
-    let code = r#"
-if a == 5 { } else { }"#;
+#[cfg(test)]
+mod for_tests {
+    use super::*;
 
-    let ast = parse_text(code).unwrap();
-}
-
-#[test]
-fn test_if_else_if_else() {
-    let code = r#"
-if a == 5 { 
-
-} else if a == 6 {
-
-} else {
-
-}"#;
-
-    let ast = parse_text(code).unwrap();
-}
-
-#[test]
-fn test_for() {
-    let code = r#"for { }"#;
-
-    let ast = parse_text(code).unwrap();
-}
-
-#[test]
-fn test_range_for() {
-    let code = r#"for i in 0..10 { }"#;
-
-    let ast = parse_text(code).unwrap();
-}
-
-#[test]
-fn test_for_identifier() {
-    let code = r#"for i in integers { }"#;
-
-    let ast = parse_text(code).unwrap();
-}
-
-#[test]
-fn test_function_call() {
-    let code = r#"foo(5)"#;
-
-    let ast = parse_text(code).unwrap();
+    #[test]
+    fn test_for() {
+        let code = r#"for { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
+    
+    #[test]
+    fn test_range_for() {
+        let code = r#"for i in 0..10 { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
+    
+    #[test]
+    fn test_for_identifier() {
+        let code = r#"for i in integers { }"#;
+    
+        let ast = parse_text(code).unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -293,6 +296,13 @@ mod call_tests {
 
         let ast = parse_text(code).unwrap();
     }
+
+    #[test]
+    fn test_function_call() {
+        let code = r#"foo(5)"#;
+
+        let ast = parse_text(code).unwrap();
+    }
 }
 
 #[cfg(test)]
@@ -323,13 +333,17 @@ mod array_tests {
 
 #[cfg(test)]
 mod sql_tests {
+    use crate::parse_raw_ast;
+
     use super::*;
 
     #[test]
     fn test_sql() {
         let code = r#"const sql = select id, name from people where id == 1"#;
 
-        let ast = parse_text(code).unwrap();
+        let ast = parse_raw_ast(code).unwrap();
+
+        println!("{:#?}", ast);
     }
 }
 
@@ -349,5 +363,53 @@ mod property_access_tests {
         let code = r#"a.b(5)"#;
 
         let ast = parse_text(code).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod struct_test {
+    use crate::parse_raw_ast;
+
+    use super::*;
+
+    #[test]
+    fn test_struct() {
+        let code = r#"struct Person { name string }"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_struct_with_multiple_fields() {
+        let code = r#"struct Human {
+            name string = "qwer"
+            age int = 10
+            favorite_color string?
+        }"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_struct_with_default() {
+        let code = r#"struct Person { 
+            name string = "qwerty" age int 
+        }"#;
+
+        let ast = parse_text(code).unwrap();
+    }
+
+    #[test]
+    fn test_struct_initialization() {
+        let code = r#"const new_human = Human { }"#;
+
+        let ast = parse_raw_ast(code).unwrap();
+    }
+
+    #[test]
+    fn test_struct_with_fields_initialization() {
+        let code = r#"const new_human = Human { name: "makkara" }"#;
+
+        let ast = parse_raw_ast(code).unwrap();
     }
 }

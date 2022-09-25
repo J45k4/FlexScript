@@ -62,11 +62,11 @@ for row in sql {
     print(row.name)
 }
 
-struct Human {
-    name: string = "qwer"
-    age: int = 10
-    favorite_color: string?
-}
+// struct Human {
+//     name string = "qwer"
+//     age int = 10
+//     favorite_color string?
+// }
 
 Human.constructed = () => {
     print("{} was constructed", this.name)

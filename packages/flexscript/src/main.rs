@@ -15,7 +15,7 @@ fn main() {
 
             let res = parse_raw_ast(&text).unwrap();
 
-            println!("{:?}", res);
+            println!("{:#?}", res);
         }
     }
 }
