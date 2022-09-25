@@ -15,15 +15,16 @@ plus = { "+" }
 minus = { "-" }
 multi = { "*" }
 divide = { "/" }
+modulo = { "%" }
 
 logical_and = { "&&" }
 logical_or = { "||" }
 logical_eq = { "==" }
-logical_smaller = { "<" }
-logical_bigger = { ">" }
-logical_smaller_eq = { "<=" }
-logical_bigger_eq = { ">=" }
-logical_not_eq = { "!=" }
+logical_lt = { "<" }
+logical_lte = { "<=" }
+logical_gt = { ">" }
+logical_gte = { ">=" }
+logical_neq = { "!=" }
 
 true_bool = { "true" }
 false_bool = { "false" }
@@ -48,20 +49,24 @@ for_expr = { "for" ~ (identifier ~ "in" ~ ( range_expr | expr ))? ~ "{" ~ "}" }
 
 range_expr = { expr? ~ ".." ~ expr? }
 
-term = { factor ~ ((multi | divide) ~ factor)* }
+term_op = { multi | divide }
+
+term = { factor ~ (term_op ~ factor)* }
+
+logical_op = { 
+    logical_and | 
+    logical_or | 
+    logical_eq | 
+    logical_lt | 
+    logical_lte |
+    logical_gt | 
+    logical_gte | 
+    logical_neq
+}
+
 expr = {
     term ~ ((plus | minus) ~ term)* ~ 
-    ((
-        logical_and | 
-        logical_or | 
-        logical_eq | 
-        logical_smaller_eq |
-        logical_bigger_eq |
-        logical_smaller | 
-        logical_bigger |
-        logical_not_eq
-    ) ~ expr)? |
-    while_expr
+    (logical_op ~ expr)?
 }
 
 int_type = { "int" }

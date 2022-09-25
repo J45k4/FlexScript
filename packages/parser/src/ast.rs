@@ -80,18 +80,59 @@ pub struct IndexExpr {
     pub index: Box<Expr>,
 }
 
-pub enum Expr {
-    MatchExpr(MatchExpr),
-    IfExpr(IfExpr),
-    CallExpr(CallExpr),
-    SqlExpr(SqlExpr),
-    XmlExpr(XmlExpr),
-    RangeExpr(RangeExpr),
-    ForExpr(ForExpr),
-    Literal(Literal),
-    PropertyAccessExpr(PropertyAccessExpr),
-    IndexExpr(IndexExpr),
-    Identifier(String),
+pub enum Factor {
+    Float(f64),
+    Int(i64),
+    Bool(bool),
+    String(String),
+}
+
+pub enum TermOperator {
+    Mul,
+    Div,
+    Mod,
+}
+
+pub struct TermRightSide {
+    pub val: Box<Factor>,
+    pub op: TermOperator,
+}
+
+pub struct Term {
+    left: Factor,
+    right: Vec<TermRightSide>,
+}
+
+pub enum ExprOperator {
+    Add,
+    Sub,
+}
+
+pub struct ExprRightSide {
+    pub val: Box<Term>,
+    pub op: ExprOperator,
+}
+
+pub enum ExprTerminalOperator {
+    And,
+    Or,
+    Eq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    Neq
+}
+
+pub struct ExprTerminal {
+    pub val: Box<Expr>,
+    pub op: ExprTerminalOperator,
+}
+
+pub struct Expr {
+    left: Term,
+    right: Vec<ExprRightSide>,
+    terminal: Option<ExprTerminal>,
 }
 
 pub enum Stmt {
@@ -102,10 +143,11 @@ pub enum Stmt {
     FunctionStmt(FunctionStmt),
     ContinueStmt,
     BreakStmt,
-    ReturnStmt
+    ReturnStmt,
+    Literal(Literal),
 }
 
-type Stmts = Vec<Stmt>;
+pub type Stmts = Vec<Stmt>;
 
 pub struct AST {
     pub stmts: Stmts
