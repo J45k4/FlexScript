@@ -149,6 +149,7 @@ sql_stmt = { sql_select | sql_insert | sql_update }
 block_stmt = { "{" ~ stmts? ~ "}" }
 
 stmt = {
+    struct_stmt |
     for_expr |
     const_stmt |
     let_stmt |
@@ -156,7 +157,6 @@ stmt = {
     if_stmt |
     use_stmt |
     enum_stmt |
-    struct_stmt |
     struct_init |
     type_stmt |
     return_stmt |

@@ -1,4 +1,19 @@
 
+
+
+pub enum NonNullType {
+    Int,
+    Float,
+    Bool,
+    String,
+}
+
+pub struct  VarType {
+    pub non_null: bool,
+    pub array: bool,
+    pub type_: NonNullType,
+}
+
 pub struct Param {
 
 }
@@ -16,18 +31,35 @@ pub struct FunctionStmt {
     pub body: Stmts,
 }
 
+pub struct FactorStmt {
+    pub name: String,
+    pub type_: VarType,
+    pub value: Option<Literal>,
+}
+
+pub struct StructField {
+    pub name: String,
+    pub type_: VarType,
+}
+
 pub struct StructStmt {
-    pub name: Option<String>,
-    pub fields: Vec<Param>,
+    pub name: String,
+    pub fields: Vec<StructField>,
 }
 
 pub struct TypeStmt {
-    pub name: Option<String>,
+    pub name: String,
     pub fields: Vec<Param>,
 }
 
-pub struct EnumStmt {
+pub struct EnumField {
+    pub name: String,
+    pub value: Option<Expr>,
+}
 
+pub struct EnumStmt {
+    pub name: String,
+    pub fields: Vec<EnumField>,
 }
 
 pub struct MatchCase {
@@ -60,8 +92,8 @@ pub struct XmlExpr {
 }
 
 pub struct RangeExpr {
-    start: Option<Box<Expr>>,
-    end: Option<Box<Expr>>,
+    pub start: Option<Box<Expr>>,
+    pub end: Option<Box<Expr>>,
 }
 
 pub struct ForExpr {
@@ -99,8 +131,8 @@ pub struct TermRightSide {
 }
 
 pub struct Term {
-    left: Factor,
-    right: Vec<TermRightSide>,
+    pub left: Factor,
+    pub right: Vec<TermRightSide>,
 }
 
 pub enum ExprOperator {
@@ -130,9 +162,9 @@ pub struct ExprTerminal {
 }
 
 pub struct Expr {
-    left: Term,
-    right: Vec<ExprRightSide>,
-    terminal: Option<ExprTerminal>,
+    pub left: Term,
+    pub right: Vec<ExprRightSide>,
+    pub terminal: Option<ExprTerminal>,
 }
 
 pub enum Stmt {
@@ -142,8 +174,8 @@ pub enum Stmt {
     EnumStmt(EnumStmt),
     FunctionStmt(FunctionStmt),
     ContinueStmt,
-    BreakStmt,
-    ReturnStmt,
+    BreakStmt(Option<Box<Stmt>>),
+    ReturnStmt(Option<Box<Stmt>>),
     Literal(Literal),
 }
 
