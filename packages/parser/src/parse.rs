@@ -1,26 +1,39 @@
 use std::{any, vec};
 
 use anyhow::Ok;
-use pest::iterators::Pair;
+use pest::iterators::{Pair, Pairs};
 
-use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, StructStmt, TypeStmt, EnumStmt, FunctionStmt};
+use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, FunctionStmt, BodyItem, Operation, BinOP, Const, Assign};
 
 
-pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Stmts> {
-    let mut stmts = vec![];
+pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Vec<BodyItem>> {
+    let mut items = vec![];
 
     for pair in pair.into_inner() {
-        match pair.as_rule() {
-            Rule::stmt => {
-                let stmt = parse_stmt(pair)?;
-                stmts.push(stmt);
+        let rule = pair.as_rule();
+
+        match rule {
+            Rule::stmts => {
+                let inner = pair.into_inner();
+
+                for pair in inner {
+                    let rule = pair.as_rule();
+
+                    match rule {
+                        Rule::stmt => {
+                            let stmt = parse_stmt(pair)?;
+                            items.push(stmt);
+                        }
+                        _ => {}
+                    }
+                }
             }
             Rule::EOI => (),
             _ => {}
         }
     }
 
-    Ok(stmts)
+    Ok(items)
 }
 
 fn parse_break_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
@@ -33,25 +46,74 @@ fn parse_return_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
     Ok(Stmt::ReturnStmt(None))
 }
 
-pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
+// pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Stmts> {
+//     let mut stmts = vec![];
+
+//     let inner = pair.into_inner();
+
+//     for pair in inner {
+//         let rule = pair.as_rule();
+
+//         match rule {
+//             Rule::stmt => {
+//                 let stmt = parse_stmt(pair)?;
+//                 stmts.push(stmt);
+//             }
+//             Rule::stmts => {
+//                 let stmts = parse_stmts(pair)?;
+//                 stmts.extend(stmts);
+//             }
+//             Rule::EOI => (),
+//             _ => {}
+//         }
+//     }
+
+//     Ok(stmts)
+// }
+
+fn parse_assignment_stmt(pair: Pair<Rule>) -> anyhow::Result<Assign> {
+    println!("parse_assignment_stmt {:#?}", pair);
+
     let mut inner = pair.into_inner();
+
     let next = inner.next().unwrap();
 
-    let stmt = match next.as_rule() {
-        Rule::expr => Stmt::Expr(parse_expr(next)?),
-        Rule::struct_stmt => Stmt::StructStmt(parse_struct_stmt(next)?),
-        Rule::type_stmt => Stmt::TypeStmt(parse_type_stmt(next)?),
-        Rule::enum_stmt => Stmt::EnumStmt(parse_enum_stmt(next)?),
-        Rule::function_stmt => Stmt::FunctionStmt(parse_function_stmt(next)?),
-        Rule::continue_stmt => Stmt::ContinueStmt,
-        Rule::break_stmt => parse_break_stmt(next)?,
-        Rule::return_stmt => parse_return_stmt(next)?,
+    let target = parse_expr(next)?;
+
+    let next = inner.next().unwrap();
+
+    let value = parse_expr(next)?;
+
+    let assign = Assign {
+        target: target,
+        value: value
+    };
+
+    Ok(assign)
+}
+
+pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
+
+    let item = match rule {
+        Rule::expr => BodyItem::Expr(parse_expr(next)?),
+        Rule::assignment_stmt => BodyItem::Assign(parse_assignment_stmt(next)?),
+        
+        // Rule::struct_stmt => Stmt::StructStmt(parse_struct_stmt(next)?),
+        // Rule::type_stmt => Stmt::TypeStmt(parse_type_stmt(next)?),
+        // Rule::enum_stmt => Stmt::EnumStmt(parse_enum_stmt(next)?),
+        // Rule::function_stmt => Stmt::FunctionStmt(parse_function_stmt(next)?),
+        // Rule::continue_stmt => Stmt::ContinueStmt,
+        // Rule::break_stmt => parse_break_stmt(next)?,
+        // Rule::return_stmt => parse_return_stmt(next)?,
         _ => {
-            return Err(anyhow::anyhow!("Unexpected rule: {:?}", next.as_rule()));
+            return Err(anyhow::anyhow!("Parse stmt unexpected rule: {:?}", next.as_rule()));
         }
     };
     
-    Ok(stmt)
+    Ok(item)
 }
 
 
@@ -126,7 +188,7 @@ fn parse_type_stmt(pair: Pair<Rule>) -> anyhow::Result<TypeStmt> {
     })
 }
 
-fn parse_struct_stmt(pair: Pair<Rule>) -> anyhow::Result<StructStmt> {
+fn parse_struct_stmt(pair: Pair<Rule>) -> anyhow::Result<Struct> {
     let mut inner = pair.into_inner();
 
     let name = inner.next().unwrap().as_str().to_string();
@@ -143,7 +205,7 @@ fn parse_struct_stmt(pair: Pair<Rule>) -> anyhow::Result<StructStmt> {
         }
     }
 
-    let stmt = StructStmt {
+    let stmt = Struct {
         name: name,
         fields: fields,
     };
@@ -171,48 +233,145 @@ fn parse_logical_op(pair: Pair<Rule>) -> anyhow::Result<ExprTerminalOperator> {
 
     Ok(op)
 }
+fn parse_operator(pair: Pair<Rule>) -> anyhow::Result<Operation> {
+    match pair.as_rule() {
+        // Rule::logical_op => {
+        //     let op = parse_logical_op(pair)?;
+        //     Ok(Operation::Logical(op))
+        // }
+        Rule::plus => Ok(Operation::Add),
+        Rule::minus => Ok(Operation::Sub),
+        Rule::multi => Ok(Operation::Mul),
+        Rule::divide => Ok(Operation::Div),
+        Rule::modulo => Ok(Operation::Modulus),
+        _ => Err(anyhow::anyhow!("Unexpected rule: {:?}", pair.as_rule())),
+    }
+}
 
-pub fn parse_expr(pair: Pair<Rule>) -> anyhow::Result<Expr> {
-    let mut inner = pair.into_inner();
+pub fn parse_term_inner(mut inner: Pairs<Rule>) -> anyhow::Result<Expr> {
     let next = inner.next().unwrap();
+    let left = parse_factor(next)?;
+    
+    let next = inner.next();
 
-    let left = parse_term(next)?;
-    let mut rights = vec![];
-    let mut terminal = None;
+    if let Some(next) = next {
+        let op = parse_operator(next)?;
+        let right = parse_term_inner(inner)?;
+        
+        let binop = BinOP {
+            op: op,
+            left: Box::new(left),
+            right: Box::new(right),  
+        };
 
-    for pair in inner {
-        // match pair.as_rule() {
-        //     Rule::logical_op => {
-        //         let op = parse_logical_op(pair)?;
-        //         let inner = pair.into_inner();
-        //         let next = inner.next().unwrap();
-        //         let expr = parse_expr(pair)?;
-                
-        //         terminal = Some(ExprTerminal {
-        //             val: Box::new(expr),
-        //             op,
-        //         });
-        //     }
-        //     _ => {}
-        // };
-
-        // let term = parse_term(pair)?;
-
-        // let right = ExprRightSide {
-        //     val: Box::new(term),
-        //     op: ExprOperator::Add,
-        // };
-
-        // rights.push(right);
+        return Ok(Expr::BinOP(binop));
     }
 
-    let expr = Expr {
-        left: left,
-        right: rights,
-        terminal: terminal,
-    };
+    Ok(left)
+}
+
+pub fn parse_term(pair: Pair<Rule>) -> anyhow::Result<Expr> {   
+    let inner = pair.into_inner();
     
-    Ok(expr)
+    parse_term_inner(inner)
+}
+
+fn parse_expr_inner(mut inner: Pairs<Rule>) -> anyhow::Result<Expr> {
+    let next = inner.next().unwrap();
+    let left = parse_term(next)?;
+    
+    let next = inner.next();
+
+    if let Some(next) = next {
+        let op = parse_operator(next)?;
+        let right = parse_expr_inner(inner)?;
+        
+        let binop = BinOP {
+            op: op,
+            left: Box::new(left),
+            right: Box::new(right),  
+        };
+
+        return Ok(Expr::BinOP(binop));
+    }
+
+    Ok(left)
+}
+
+pub fn parse_expr(pair: Pair<Rule>) -> anyhow::Result<Expr> {
+    let inner = pair.into_inner();
+
+    parse_expr_inner(inner)
+
+    // let next = inner.next().unwrap();
+
+    // let left = parse_term(next)?;
+    // // let mut rights = vec![];
+    // // let mut terminal = None;
+    // let next = inner.next();
+
+    // if let Some(next) = next {
+    //     let op = parse_operator(next)?;
+    //     let right = parse_expr(inner.next().unwrap())?;
+        
+    //     let binop = BinOP {
+    //         op: op,
+    //         left: Box::new(left),
+    //         right: Box::new(right),  
+    //     };
+
+    //     return Ok(Expr::BinOP(binop));
+    // }
+
+    // Ok(left)
+
+    // for pair in inner {
+    //     match pair.as_rule() {
+    //         Rule::factor => {
+    //             parse_factor(pair)?;
+
+    //         }
+    //         // Rule::logical_op => {
+    //         //     let op = parse_logical_op(pair)?;
+    //         //     let inner = pair.into_inner();
+    //         //     let next = inner.next().unwrap();
+    //         //     let expr = parse_expr(pair)?;
+                
+    //         //     terminal = Some(ExprTerminal {
+    //         //         val: Box::new(expr),
+    //         //         op,
+    //         //     });
+    //         // }
+    //         Rule::plus => {
+    //             let mut inner = pair.into_inner();
+    //             let next = inner.next().unwrap();
+    //             // let expr = parse_expr(pair)?;
+                
+    //             // terminal = Some(ExprTerminal {
+    //             //     val: Box::new(expr),
+    //             //     op: ExprTerminalOperator::Plus,
+    //             // });
+    //         }
+    //         _ => {}
+    //     };
+
+    //     // let term = parse_term(pair)?;
+
+    //     // let right = ExprRightSide {
+    //     //     val: Box::new(term),
+    //     //     op: ExprOperator::Add,
+    //     // };
+
+    //     // rights.push(right);
+    // }
+
+    // let expr = Expr {
+    //     left: left,
+    //     right: rights,
+    //     terminal: terminal,
+    // };
+    
+    // Ok(expr)
 }
 
 fn parse_term_op(pair: Pair<Rule>) -> anyhow::Result<TermOperator> {
@@ -231,48 +390,40 @@ fn parse_term_op(pair: Pair<Rule>) -> anyhow::Result<TermOperator> {
     Ok(op)
 }
 
-pub fn parse_term(pair: Pair<Rule>) -> anyhow::Result<Term> {   
+pub fn parse_factor(pair: Pair<Rule>) -> anyhow::Result<Expr> {
     let mut inner = pair.into_inner();
-    let next = inner.next().unwrap();
-    let left = parse_factor(next)?;
+    let next = inner.next().unwrap();    
 
-    let mut rights = vec![];
-
-    for pair in inner {
-        let mut inner = pair.into_inner();
-        // let next = inner.next().unwrap();
-        // let op = parse_term_op(pair)?;
-        // let next = inner.next().unwrap();
-        // let factor = parse_factor(next)?;
-
-        // let right = TermRightSide {
-        //     val: Box::new(factor),
-        //     op,
-        // };
-
-        // rights.push(right);
-    }
-
-    let term = Term {
-        left: left,
-        right: rights,
-    };
-
-    Ok(term)
-}
-
-pub fn parse_factor(pair: Pair<Rule>) -> anyhow::Result<Factor> {
-    let mut inner = pair.into_inner();
-    let next = inner.next().unwrap();
-
-    let factor = match next.as_rule() {
-        // Rule::literal => Factor::Literal(parse_literal(next)?),
+    let expr = match next.as_rule() {
+        Rule::string_literal => {
+            let mut inner = next.into_inner();
+            let next = inner.next().unwrap();
+            let val = next.as_str().to_string();
+            
+            Expr::Const(Const::String(val))
+        },
+        Rule::float => {
+            let val = next.as_str().to_string();
+            let val = val.parse::<f64>()?;
+            
+            Expr::Const(Const::Float(val))
+        },
+        Rule::integer => {
+            let val = next.as_str().to_string();
+            let val = val.parse::<i64>()?;
+            
+            Expr::Const(Const::Int(val))
+        },
+        Rule::identifier => Expr::Identifier(next.as_str().to_string()),
         // Rule::expr => Factor::Expr(parse_expr(next)?),
         _ => {
-            return Err(anyhow::anyhow!("Unexpected rule: {:?}", next.as_rule()));
+            return Err(anyhow::anyhow!("Parse factor unexpected rule: {:?}", next.as_rule()));
         }
     };
 
-    Ok(factor)
+    Ok(expr)
 }
+
+
+
 

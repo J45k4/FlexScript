@@ -2,7 +2,7 @@
 integer = @{ (ASCII_DIGIT)+ }
 float = @{ (ASCII_DIGIT)+ ~ "." ~ (ASCII_DIGIT)+ }
 string = { ASCII_ALPHANUMERIC* }
-string_literal = @{ "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+string_literal = { "\"" ~ string ~ "\"" }
 
 method_call = { "." ~ identifier ~ "(" ~ (stmt ~ ("," ~ stmt)*)? ~ ")" }
 member_access = { "." ~ identifier }
@@ -49,9 +49,9 @@ for_expr = { "for" ~ (identifier ~ "in" ~ ( range_expr | expr ))? ~ "{" ~ "}" }
 
 range_expr = { expr? ~ ".." ~ expr? }
 
-term_op = { multi | divide }
+// term_op = { multi | divide }
 
-term = { factor ~ (term_op ~ factor)* }
+term = { factor ~ ((multi | divide) ~ factor)* }
 
 logical_op = { 
     logical_and | 
@@ -86,7 +86,7 @@ field_decorator = { "@" ~ identifier ~ "(" ~ expr ~ ")" }
 
 const_stmt = { "const" ~ identifier ~ type_def? ~ "=" ~ stmt }
 let_stmt = { "let" ~ identifier ~ type_def ~ "=" ~ expr }
-assignment_stmt = { identifier ~ "=" ~ expr }
+assignment_stmt = { expr ~ "=" ~ expr }
 use_stmt = { "use" ~ identifier }
 
 struct_field = { identifier ~ type_def? ~ ("=" ~ stmt)? }

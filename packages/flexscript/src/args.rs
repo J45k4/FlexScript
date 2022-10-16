@@ -9,10 +9,16 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    Rawast(RawastArgs)
+    Rawast(RawastArgs),
+    Ast(AstArgs),
 }
 
 #[derive(Debug, Parser)]
 pub struct RawastArgs {
+    pub path: String
+}
+
+#[derive(Debug, Parser)]
+pub struct AstArgs {
     pub path: String
 }
