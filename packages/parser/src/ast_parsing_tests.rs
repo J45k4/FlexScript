@@ -1,10 +1,10 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch};
+    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField};
     use crate::BinOP;
     use crate::BodyItem;
-    use crate::Operation;
+    use crate::Operator;
 
     use super::*;
 
@@ -86,7 +86,7 @@ mod tests {
                                     Const::Int(5)
                                 ),
                             ),
-                            op: Operation::Add,
+                            op: Operator::Add,
                             right: Box::new( 
                                 Expr::BinOP(
                                     BinOP {
@@ -95,7 +95,7 @@ mod tests {
                                                 Const::Int(5)
                                             )
                                         ),
-                                        op: Operation::Add,
+                                        op: Operator::Add,
                                         right: Box::new(
                                             Expr::BinOP(
                                                 BinOP {
@@ -104,7 +104,7 @@ mod tests {
                                                             Const::Int(5)
                                                         )
                                                     ),
-                                                    op: Operation::Mul,
+                                                    op: Operator::Mul,
                                                     right: Box::new(
                                                         Expr::Const(
                                                             Const::Int(2)
@@ -193,7 +193,7 @@ mod tests {
         } else if 10 == 5 {
 
         } else {
-
+            
         }
         "#;
 
@@ -213,7 +213,7 @@ mod tests {
                                                     Const::Int(10)
                                                 )
                                             ),
-                                            op: Operation::Neq,
+                                            op: Operator::Neq,
                                             right: Box::new(
                                                 Expr::Const(
                                                     Const::Int(5)
@@ -231,7 +231,7 @@ mod tests {
                                                     Const::Int(10)
                                                 )
                                             ),
-                                            op: Operation::Eq,
+                                            op: Operator::Eq,
                                             right: Box::new(
                                                 Expr::Const(
                                                     Const::Int(5)
@@ -247,8 +247,96 @@ mod tests {
                     )
                 )
             ],
+        };        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_const_obj() {
+        let code = r#"
+            const person = {
+                name: "John"
+                age: 20
+            }
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Const(
+                    ConstStmt {
+                        ident: "person".to_string(),
+                        value: Expr::ObjExpr(
+                            ObjExpr {
+                                fields: vec![
+                                    ObjField {
+                                        target: "name".to_string(),
+                                        value: Expr::Const(
+                                            Const::String("John".to_string())
+                                        )
+                                    },
+                                    ObjField {
+                                        target: "age".to_string(),
+                                        value: Expr::Const(
+                                            Const::Int(20)
+                                        )
+                                    }
+                                ]
+                            }
+                        )
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_type() {
+        let code = r#"
+            type Person = {
+                name string
+                age int?
+                friends Person[]
+            }
+        "#;
+
+        let rawast = parse_raw_ast(code).unwrap();
+
+        println!("{:#?}", rawast);
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Type(
+                    TypeStmt {
+                        name: "Person".to_string(),
+                        fields: vec![
+                            TypeField {
+                                ident: "name".to_string(),
+                                typ: VarType {
+                                    typ: NonNullType::String,
+                                    array: false,
+                                    non_null: false
+                                }
+                            },
+                            TypeField {
+                                ident: "age".to_string(),
+                                typ: VarType {
+                                    typ: NonNullType::Int,
+                                    array: false,
+                                    non_null: false
+                                }
+                            }
+                        ]
+                    }
+                )
+            ]
         };
 
         assert_eq!(ast, expected)
     }
 }
+

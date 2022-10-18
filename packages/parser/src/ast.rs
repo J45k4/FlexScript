@@ -56,9 +56,15 @@ pub struct Struct {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TypeField {
+    pub ident: String,
+    pub typ: VarType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct TypeStmt {
     pub name: String,
-    pub fields: Vec<Param>,
+    pub fields: Vec<TypeField>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -190,12 +196,13 @@ pub struct ExprTerminal {
     pub op: ExprTerminalOperator,
 }
 
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct Expr {
-//     pub terms: Vec<Term>,
-//     pub right: Vec<ExprRightSide>,
-//     pub terminal: Option<ExprTerminal>,
-// }
+#[derive(Debug, Clone, PartialEq)]
+pub enum Const {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    String(String),
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct IfBranch {
@@ -210,19 +217,23 @@ pub struct If {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ObjField {
+    pub target: String,
+    pub value: Expr
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjExpr {
+    pub fields: Vec<ObjField>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Const(Const),
     BinOP(BinOP),
     Identifier(String),
     If(If),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Const {
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
+    ObjExpr(ObjExpr),
 }
 
 pub enum Value {
@@ -230,7 +241,7 @@ pub enum Value {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Operation {
+pub enum Operator {
     Add,
     Sub,
     Mul,
@@ -252,7 +263,7 @@ pub enum Operation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BinOP {
     pub left: Box<Expr>,
-    pub op: Operation,
+    pub op: Operator,
     pub right: Box<Expr>,
 }
 
@@ -276,11 +287,19 @@ pub struct Assign {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ConstStmt {
+    pub ident: String,
+    pub value: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum BodyItem {
     Expr(Expr),
     Assign(Assign),
     Identifier(String),
     Struct(Struct),
+    Const(ConstStmt),
+    Type(TypeStmt),
 }
 
 pub type Body = Vec<BodyItem>;
@@ -297,61 +316,3 @@ pub type Stmts = Vec<Stmt>;
 pub struct AST {
     pub stmts: Stmts
 }
-
-// #[derive(Debug, PartialEq)]
-// pub struct FunStmt {
-//     pub name: String
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub enum Stmt {
-//     For,
-//     If,
-//     Match,
-//     Return,
-//     While,
-//     Break,
-//     Pass,
-//     Continue,
-//     Fun(FunStmt)
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub enum Operator {
-//     Add,
-//     Sub,
-//     Mult,
-//     Div,
-//     Mod
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub enum Expr {
-//     BoolOp,
-//     NamedExpr,
-//     BinOp,
-//     IfExp(Box<Expr>, Box<Expr>, Box<Expr>)
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub enum CodeFileItem {
-//     Stmt(Stmt),
-//     Expr(Expr)
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub struct CodeFile {
-//     pub body: Vec<CodeFileItem>
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub enum AstItem {
-//     Stmt(Stmt),
-//     Expr(Expr),
-//     CodeFile(CodeFile),
-// }
-
-// #[derive(Debug, PartialEq)]
-// pub struct Ast {
-//     pub body: Vec<AstItem>
-// }

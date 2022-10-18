@@ -75,12 +75,19 @@ bool_type = { "bool" }
 string_type = { "string" }
 object_type = { "{" ~ type_field ~ "}" }
 
-non_null_type = { int_type | float_type | bool_type | string_type | object_type }
+non_null_type = { 
+    int_type | 
+    float_type | 
+    bool_type | 
+    string_type | 
+    object_type |
+    identifier
+}
 array_type = { non_null_type ~ "[]" }
 //maybe_type = { (array_type | non_null_type) ~ "?" }
 maybe_type = { non_null_type ~ "?" }
-// type_def = { maybe_type | array_type | non_null_type }
-type_def = { non_null_type ~ "?"? }
+type_def = { maybe_type | array_type | non_null_type }
+//type_def = { non_null_type ~ "?"? }
 
 field_decorator = { "@" ~ identifier ~ "(" ~ expr ~ ")" }
 
@@ -104,7 +111,7 @@ enum_stmt = { "enum" ~ identifier ~ "{" ~ enum_field* ~ "}" }
 type_field = { identifier ~ type_def ~ field_decorator* }
 type_object = { "{" ~ type_field* ~ "}" }
 type_simple = { type_def }
-type_stmt = { "type" ~ identifier ~ (type_object | type_simple) }
+type_stmt = { "type" ~ identifier ~ "=" ~ (type_object | type_simple) }
 
 return_stmt = { "return" ~ expr }
 break_stmt = { "break" }
