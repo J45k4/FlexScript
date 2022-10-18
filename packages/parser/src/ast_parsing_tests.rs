@@ -1,7 +1,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType};
+    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch};
     use crate::BinOP;
     use crate::BodyItem;
     use crate::Operation;
@@ -183,5 +183,72 @@ mod tests {
                 )
             ]
         })
+    }
+
+    #[test]
+    fn test_parse_if() {
+        let code = r#"
+        if 10 != 5 {
+
+        } else if 10 == 5 {
+
+        } else {
+
+        }
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::If(
+                        If {
+                            branches: vec![
+                                IfBranch {
+                                    condition: Expr::BinOP(
+                                        BinOP {
+                                            left: Box::new(
+                                                Expr::Const(
+                                                    Const::Int(10)
+                                                )
+                                            ),
+                                            op: Operation::Neq,
+                                            right: Box::new(
+                                                Expr::Const(
+                                                    Const::Int(5)
+                                                )
+                                            )
+                                        }
+                                    ),
+                                    body: vec![]
+                                },
+                                IfBranch {
+                                    condition: Expr::BinOP(
+                                        BinOP {
+                                            left: Box::new(
+                                                Expr::Const(
+                                                    Const::Int(10)
+                                                )
+                                            ),
+                                            op: Operation::Eq,
+                                            right: Box::new(
+                                                Expr::Const(
+                                                    Const::Int(5)
+                                                )
+                                            )
+                                        }
+                                    ),
+                                    body: vec![]
+                                }
+                            ],
+                            else_body: vec![]
+                        }
+                    )
+                )
+            ],
+        };
+
+        assert_eq!(ast, expected)
     }
 }

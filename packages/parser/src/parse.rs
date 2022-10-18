@@ -3,7 +3,7 @@ use std::{any, vec};
 use anyhow::Ok;
 use pest::iterators::{Pair, Pairs};
 
-use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, FunctionStmt, BodyItem, Operation, BinOP, Const, Assign};
+use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, FunctionStmt, BodyItem, Operation, BinOP, Const, Assign, If, IfBranch};
 
 
 pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Vec<BodyItem>> {
@@ -92,6 +92,74 @@ fn parse_assignment_stmt(pair: Pair<Rule>) -> anyhow::Result<Assign> {
     Ok(assign)
 }
 
+fn parse_if_branch(pair: Pair<Rule>) -> anyhow::Result<IfBranch> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let expr = parse_expr(next)?;
+    let next = inner.next().unwrap();
+    let body = parse_stmts(next)?;
+
+    let branch = IfBranch {
+        condition: expr,
+        body: body
+    };
+
+    Ok(branch)
+}
+
+fn parse_if_stmt(pair: Pair<Rule>) -> anyhow::Result<Expr> {
+    println!("parse_if_stmt {:#?}", pair);
+
+    let mut inner = pair.into_inner();
+
+    let mut if_expr = If {
+        branches: vec![],
+        else_body:  vec![]
+    };
+
+    while let Some(pair) = inner.next() {
+        let rule = pair.as_rule();
+
+        match rule {
+            Rule::if_stmt => {
+                let branch = parse_if_branch(pair)?;
+
+                if_expr.branches.push(branch);
+            },
+            Rule::else_if_branch => {
+                let branch = parse_if_branch(pair)?;
+
+                if_expr.branches.push(branch);
+            },
+            Rule::else_branch => {
+                let mut inner = pair.into_inner();
+                let next = inner.next().unwrap();
+                let body = parse_stmts(next)?;
+
+                if_expr.else_body = body;
+            },
+            _ => {}
+        }
+    }
+
+    // let next = inner.next().unwrap();
+
+    // let condition = parse_expr(next)?;
+
+    // let next = inner.next().unwrap();
+
+    // let body = parse_stmts(next)?;
+
+    // let mut else_body = None;
+
+    // if let Some(next) = inner.next() {
+    //     let else_body = parse_stmts(next)?;
+    //     else_body = Some(else_body);
+    // }
+
+    Ok(Expr::If(if_expr))
+}
+
 pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
@@ -100,6 +168,7 @@ pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
     let item = match rule {
         Rule::expr => BodyItem::Expr(parse_expr(next)?),
         Rule::assignment_stmt => BodyItem::Assign(parse_assignment_stmt(next)?),
+        Rule::if_stmt => BodyItem::Expr(parse_if_stmt(next)?),
         
         // Rule::struct_stmt => Stmt::StructStmt(parse_struct_stmt(next)?),
         // Rule::type_stmt => Stmt::TypeStmt(parse_type_stmt(next)?),
@@ -227,7 +296,7 @@ fn parse_logical_op(pair: Pair<Rule>) -> anyhow::Result<ExprTerminalOperator> {
         Rule::logical_gte => ExprTerminalOperator::Gte,
         Rule::logical_neq => ExprTerminalOperator::Neq,
         _ => {
-            return Err(anyhow::anyhow!("Unexpected rule: {:?}", next.as_rule()));
+            return Err(anyhow::anyhow!("Parse logical op unexpected rule: {:?}", next.as_rule()));
         }
     };
 
@@ -244,7 +313,8 @@ fn parse_operator(pair: Pair<Rule>) -> anyhow::Result<Operation> {
         Rule::multi => Ok(Operation::Mul),
         Rule::divide => Ok(Operation::Div),
         Rule::modulo => Ok(Operation::Modulus),
-        _ => Err(anyhow::anyhow!("Unexpected rule: {:?}", pair.as_rule())),
+        // Rule::logical_op => Ok()
+        _ => Err(anyhow::anyhow!("Parse operator unexpected rule: {:?}", pair.as_rule())),
     }
 }
 

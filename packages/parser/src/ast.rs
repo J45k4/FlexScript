@@ -198,10 +198,23 @@ pub struct ExprTerminal {
 // }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct IfBranch {
+    pub condition: Expr,
+    pub body: Body,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct If {
+    pub branches: Vec<IfBranch>,
+    pub else_body: Body,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Const(Const),
     BinOP(BinOP),
     Identifier(String),
+    If(If),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,7 +238,15 @@ pub enum Operation {
     LogicalAnd,
     LogicalOr,
     Modulus,
-    Pow
+    Pow,
+    And,
+    Or,
+    Eq,
+    Lt,
+    Lte,
+    Gt,
+    Gte,
+    Neq
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -262,9 +283,11 @@ pub enum BodyItem {
     Struct(Struct),
 }
 
+pub type Body = Vec<BodyItem>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodeFile {
-    pub body: Vec<BodyItem>
+    pub body: Body,
 }
 
 
