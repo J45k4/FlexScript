@@ -1,7 +1,9 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField};
+    use std::vec;
+
+    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param};
     use crate::BinOP;
     use crate::BodyItem;
     use crate::Operator;
@@ -135,7 +137,7 @@ mod tests {
             body: vec![
                 BodyItem::Assign(
                     Assign {
-                        target: Expr::Identifier("a".to_string()),
+                        target: Expr::Ident("a".to_string()),
                         value: Expr::Const(
                             Const::Int(5)
                         )
@@ -167,7 +169,7 @@ mod tests {
                                 typ: VarType {
                                     typ: NonNullType::Int,
                                     array: false,
-                                    non_null: false
+                                    nullable: false
                                 }
                             },
                             StructField {
@@ -175,7 +177,7 @@ mod tests {
                                 typ: VarType {
                                     typ: NonNullType::Int,
                                     array: false,
-                                    non_null: false
+                                    nullable: false
                                 }
                             }
                         ]
@@ -319,7 +321,7 @@ mod tests {
                                 typ: VarType {
                                     typ: NonNullType::String,
                                     array: false,
-                                    non_null: false
+                                    nullable: false
                                 }
                             },
                             TypeField {
@@ -327,10 +329,136 @@ mod tests {
                                 typ: VarType {
                                     typ: NonNullType::Int,
                                     array: false,
-                                    non_null: false
+                                    nullable: true
+                                }
+                            },
+                            TypeField {
+                                ident: "friends".to_string(),
+                                typ: VarType {
+                                    typ: NonNullType::Identifier("Person".to_string()),
+                                    array: true,
+                                    nullable: false
                                 }
                             }
                         ]
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_match() {
+        let code = r#"
+            match 10 {
+                5 => 10
+                10 => 20
+                _ => 30
+            }
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Match(
+                        MatchExpr {
+                            expr: Box::new(
+                                Expr::Const(
+                                    Const::Int(10)
+                                )
+                            ),
+                            cases: vec![
+                                MatchCase {
+                                    patterns: vec![Expr::Const(Const::Int(5))],
+                                    body: vec![
+                                        BodyItem::Expr(    
+                                            Expr::Const(
+                                                Const::Int(10)
+                                            )
+                                        )
+                                    ]
+                                },
+                                MatchCase {
+                                    patterns: vec![Expr::Const(Const::Int(10))],
+                                    body: vec![
+                                        BodyItem::Expr (
+                                            Expr::Const(
+                                                Const::Int(20)
+                                            )
+                                        )    
+                                    ]
+                                },
+                                MatchCase {
+                                    patterns: vec![],
+                                    body: vec![
+                                        BodyItem::Expr (
+                                            Expr::Const(
+                                                Const::Int(30)
+                                            )
+                                        )    
+                                    ]                                     
+                                }
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_arrow_func() {
+        let code = r#"
+            const add = (a, b) => a + b
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Const(
+                    ConstStmt {
+                        ident: "add".to_string(),
+                        value: Expr::Func(
+                            Func {
+                                is_async: false,
+                                params: vec![
+                                    Param {
+                                        name: "a".to_string(),
+                                        typ: None
+                                    },
+                                    Param {
+                                        name: "b".to_string(),
+                                        typ: None
+                                    }
+                                ],
+                                body: vec![
+                                    BodyItem::Expr(
+                                        Expr::BinOP(
+                                            BinOP {
+                                                left: Box::new(
+                                                    Expr::Ident(
+                                                        "a".to_string()
+                                                    )
+                                                ),
+                                                op: Operator::Add,
+                                                right: Box::new(
+                                                    Expr::Ident(
+                                                        "b".to_string()
+                                                    )
+                                                )
+                                            }
+                                        )
+                                    )
+                                ]
+                            }
+                        )
                     }
                 )
             ]

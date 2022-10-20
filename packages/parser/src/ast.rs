@@ -7,18 +7,20 @@ pub enum NonNullType {
     Float,
     Bool,
     String,
+    Identifier(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct  VarType {
-    pub non_null: bool,
+    pub nullable: bool,
     pub array: bool,
     pub typ: NonNullType,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param {
-
+    pub name: String,
+    pub typ: Option<VarType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,10 +32,10 @@ pub enum Literal {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct FunctionStmt {
-    pub name: Option<String>,
+pub struct Func {
+    pub is_async: bool,
     pub params: Vec<Param>,
-    pub body: Stmts,
+    pub body: Body,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -81,8 +83,8 @@ pub struct EnumStmt {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchCase {
-    pub pattern: Expr,
-    pub body: Stmts,
+    pub patterns: Vec<Expr>,
+    pub body: Body,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -231,9 +233,11 @@ pub struct ObjExpr {
 pub enum Expr {
     Const(Const),
     BinOP(BinOP),
-    Identifier(String),
+    Ident(String),
     If(If),
     ObjExpr(ObjExpr),
+    Match(MatchExpr),
+    Func(Func),
 }
 
 pub enum Value {
@@ -273,7 +277,7 @@ pub enum Stmt {
     StructStmt(Struct),
     TypeStmt(TypeStmt),
     EnumStmt(EnumStmt),
-    FunctionStmt(FunctionStmt),
+    FunctionStmt(Func),
     ContinueStmt,
     BreakStmt(Option<Box<Stmt>>),
     ReturnStmt(Option<Box<Stmt>>),

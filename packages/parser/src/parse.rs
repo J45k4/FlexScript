@@ -3,7 +3,7 @@ use std::{any, vec};
 use anyhow::{Ok, bail};
 use pest::iterators::{Pair, Pairs};
 
-use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, FunctionStmt, BodyItem, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType};
+use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, Func, BodyItem, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType, MatchCase, MatchExpr, Body, Param};
 
 fn parse_break_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
 
@@ -107,48 +107,118 @@ fn parse_if_stmt(pair: Pair<Rule>) -> anyhow::Result<Expr> {
         }
     }
 
-    // let next = inner.next().unwrap();
-
-    // let condition = parse_expr(next)?;
-
-    // let next = inner.next().unwrap();
-
-    // let body = parse_stmts(next)?;
-
-    // let mut else_body = None;
-
-    // if let Some(next) = inner.next() {
-    //     let else_body = parse_stmts(next)?;
-    //     else_body = Some(else_body);
-    // }
-
     Ok(Expr::If(if_expr))
 }
 
-fn parse_function_stmt(pair: Pair<Rule>) -> anyhow::Result<FunctionStmt> {
-    let mut name = String::new();
-    let mut params = vec![];
+fn parse_arg(pair: Pair<Rule>) -> anyhow::Result<Param> {
+    let mut inner = pair.into_inner();
 
-    for pair in pair.into_inner() {
-        match pair.as_rule() {
-            Rule::identifier => {
-                name = pair.as_str().to_string();
-            }
-            // Rule::field => {
-            //     let field = parse_field(pair)?;
-            //     fields.push(field);
-            // }
-            _ => {}
-        }
-    }
+    let next = inner.next().unwrap();
 
-    let stmt = FunctionStmt { 
-        name: Some(name), 
-        params: params, 
-        body: vec![]
+    let name = match next.as_rule() {
+        Rule::identifier => next.as_str().to_string(),
+        _ => bail!("Expected identifier")
     };
 
-    Ok(stmt)
+    let next = inner.next();
+
+    let typ = match next {
+        Some(pair) => {
+            let typ = parse_type(pair)?;
+            Some(typ)
+        },
+        None => None
+    };
+
+    let param = Param {
+        name,
+        typ
+    };
+
+    Ok(param)
+}
+
+fn parse_args(pair: Pair<Rule>) -> anyhow::Result<Vec<Param>> {
+    let mut args = vec![];
+
+    for pair in pair.into_inner() {
+        let arg = parse_arg(pair)?;
+
+        args.push(arg);
+    }
+
+    Ok(args)
+}
+
+fn parse_block(pair: Pair<Rule>) -> anyhow::Result<Body> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+
+    let body = parse_stmts(next)?;
+    
+    Ok(body)
+}
+
+fn parse_normal_func(pair: Pair<Rule>) -> anyhow::Result<Func> {
+    let mut inner = pair.into_inner();
+
+    let next = inner.next().unwrap();
+
+    let params = parse_args(next)?;
+
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
+
+    let body = match rule {
+        Rule::block_stmt => {
+            parse_block(next)?
+        },
+        Rule::stmt => {
+            vec![parse_stmt(next)?]
+        },
+        _ => {
+            panic!("Parse normal func error {:?}", rule);
+        }  
+    };
+    let func = Func {
+        params: params,
+        body: body,
+        is_async: false
+    };
+
+    Ok(func)
+}
+
+fn parse_async_func(pair: Pair<Rule>) -> anyhow::Result<Func> {
+    let mut inner = pair.into_inner();
+
+    let next = inner.next().unwrap();
+
+    let mut f = parse_normal_func(next)?;
+
+    f.is_async = true;
+
+    Ok(f)
+}
+
+fn parse_function_stmt(pair: Pair<Rule>) -> anyhow::Result<Func> {
+    let mut inner = pair.into_inner();
+
+    let next = inner.next().unwrap();
+
+    let func = match next.as_rule() {
+        Rule::async_func => {
+            parse_async_func(next)?
+        },
+        Rule::normal_func => {
+            parse_normal_func(next)?
+        },
+        _ => {
+            panic!("parse function stmt error {:?}", next);
+        }
+    };
+
+    Ok(func)
 }
 
 fn parse_enum_stmt(pair: Pair<Rule>) -> anyhow::Result<EnumStmt> {
@@ -300,7 +370,10 @@ fn parse_expr_inner(mut inner: Pairs<Rule>) -> anyhow::Result<Expr> {
         },
         Rule::object_stmt => {
             parse_object_stmt(next)?
-        }
+        },
+        Rule::function_stmt => {
+            Expr::Func(parse_function_stmt(next)?)
+        },
         _ => {
             bail!("Parse expr inner unexpected rule: {:?}", rule);
         }
@@ -369,7 +442,7 @@ pub fn parse_factor(pair: Pair<Rule>) -> anyhow::Result<Expr> {
             
             Expr::Const(Const::Int(val))
         },
-        Rule::identifier => Expr::Identifier(next.as_str().to_string()),
+        Rule::identifier => Expr::Ident(next.as_str().to_string()),
         // Rule::expr => Factor::Expr(parse_expr(next)?),
         _ => {
             return Err(anyhow::anyhow!("Parse factor unexpected rule: {:?}", next.as_rule()));
@@ -434,119 +507,111 @@ fn parse_const_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
     Ok(BodyItem::Const(stmt))
 }
 
-// fn parse_non_null_type(pair: Pair<Rule>) -> anyhow::Result<NonNullType> {
-//     let mut inner = pair.into_inner();
-//     let next = inner.next().unwrap();
+fn parse_non_null_type(pair: Pair<Rule>) -> anyhow::Result<NonNullType> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
 
-//     let type_name = next.as_str().to_string();
+    let typ = match rule {
+        Rule::int_type => {
+            NonNullType::Int
+        },
+        Rule::float_type => {
+            NonNullType::Float
+        },
+        Rule::string_type => {
+            NonNullType::String
+        },
+        Rule::bool_type => {
+            NonNullType::Bool
+        },
+        Rule::identifier => {
+            NonNullType::Identifier(next.as_str().to_string())
+        }
+        _ => {
+            bail!("Unexpected rule: {:?}", rule);
+        }
+    };
 
-//     let type_name = match type_name.as_str() {
-//         "int" => Type::Int,
-//         "float" => Type::Float,
-//         "string" => Type::String,
-//         "bool" => Type::Bool,
-//         _ => {
-//             return Err(anyhow::anyhow!("Unexpected type name: {}", type_name));
-//         }
-//     };
-
-//     Ok(NonNullType {
-//         type_name: type_name,
-//     })
-// }
+    Ok(typ)
+}
 
 
+fn parse_array_type(pair: Pair<Rule>) -> anyhow::Result<VarType> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
 
-// fn parse_array_type(pair: Pair<Rule>) -> anyhow::Result<Type> {
-//     let mut inner = pair.into_inner();
-//     let next = inner.next().unwrap();
+    let typ = match rule {
+        Rule::non_null_type => {
+            VarType {
+                typ: parse_non_null_type(next)?,
+                array: true,
+                nullable: false
+            }
+        },
+        _ => {
+            bail!("Parse arrayt type unexpected rule: {:?}", rule);
+        }
+    };
 
-//     let type_name = next.as_str().to_string();
+    Ok(typ)
+}
 
-//     // let type_name = match type_name.as_str() {
-//     //     "int" => Type::Int,
-//     //     "float" => Type::Float,
-//     //     "string" => Type::String,
-//     //     "bool" => Type::Bool,
-//     //     _ => {
-//     //         return Err(anyhow::anyhow!("Unexpected type name: {}", type_name));
-//     //     }
-//     // };
+fn parse_maybe_type(pair: Pair<Rule>) -> anyhow::Result<VarType> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
 
-//     Ok(Type::Array(Box::new(type_name)))
-// }
+    let typ = match rule {
+        Rule::array_type => {
+            let mut v = parse_array_type(next)?;
 
-// fn parse_maybe_type(pair: Pair<Rule>) -> anyhow::Result<Type> {
-//     let mut inner = pair.into_inner();
-//     let next = inner.next().unwrap();
+            v.nullable = true;
 
-//     let type_name = next.as_str().to_string();
+            v
+        },
+        Rule::non_null_type => {
+            let typ = parse_non_null_type(next)?;
+            
+            VarType {
+                typ: typ,
+                nullable: true,
+                array: false
+            }
+        },
+        _ => {
+            bail!("Parse maybe type unexpected rule: {:?}", rule);
+        }
+    };
 
-//     let type_name = match type_name.as_str() {
-//         "int" => Type::Int,
-//         "float" => Type::Float,
-//         "string" => Type::String,
-//         "bool" => Type::Bool,
-//         _ => {
-//             return Err(anyhow::anyhow!("Unexpected type name: {}", type_name));
-//         }
-//     };
-
-//     Ok(type_name)
-// }
-
-// fn parse_non_null_type(pair: Pair<Rule>) -> anyhow::Result<NonNullType> {
-//     let mut inner = pair.into_inner();
-//     let next = inner.next().unwrap();
-//     let rule = next.as_rule();
-
-//     match rule {
-//         Rule::int_type => {
-
-//         }
-//     }
-
-//     let type_name = next.as_str().to_string();
-
-//     let type_name = match type_name.as_str() {
-//         "int" => Type::Int,
-//         "float" => Type::Float,
-//         "string" => Type::String,
-//         "bool" => Type::Bool,
-//         _ => {
-//             return Err(anyhow::anyhow!("Unexpected type name: {}", type_name));
-//         }
-//     };
-
-//     Ok(NonNullType {
-//         type_name: type_name,
-//     })
-// }
+    Ok(typ)
+}
 
 fn parse_type(pair: Pair<Rule>) -> anyhow::Result<VarType> {
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
     let rule = next.as_rule();
 
-    match rule {
+    let typ = match rule {
         Rule::array_type => {
-
+            parse_array_type(next)?
         },
         Rule::maybe_type => {
-
+            parse_maybe_type(next)?
         },
         Rule::non_null_type => {
+            let n = parse_non_null_type(next)?;
 
+            VarType {
+                typ: n,
+                array: false,
+                nullable: false,
+            }
         },
         _ => {
             bail!("Parse type unexpected rule {:?}", rule);
         }
-    }
-
-    let typ = VarType {
-        array: false,
-        non_null: false,
-        typ: NonNullType::Int
     };
 
     Ok(typ)
@@ -560,6 +625,11 @@ fn parse_type_stmt(pair: Pair<Rule>) -> anyhow::Result<TypeStmt> {
 
     let next = inner.next().unwrap();
     let rule = next.as_rule();
+
+    let mut stmt = TypeStmt {
+        name: name,
+        fields: vec![]
+    };
 
     match rule {
         Rule::type_object => {
@@ -584,7 +654,7 @@ fn parse_type_stmt(pair: Pair<Rule>) -> anyhow::Result<TypeStmt> {
                             typ: ty,
                         };
 
-                        println!("Field: {:?}", field);
+                        stmt.fields.push(field);
                     },
                     _ => {
                         bail!("Parse type stmt unexpected rule: {:?}", rule);
@@ -597,15 +667,96 @@ fn parse_type_stmt(pair: Pair<Rule>) -> anyhow::Result<TypeStmt> {
         }
     }
 
+    Ok(stmt)
+}
 
-    // let ty = parse_type(next)?;
+fn parse_match_pattern(pair: Pair<Rule>, patterns: &mut Vec<Expr>) -> anyhow::Result<()> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
 
-    let stmt = TypeStmt {
-        name: name,
-        fields: vec![]
+    patterns.push(parse_expr(next)?);
+
+    let next = inner.next();
+
+    if let Some(next) = next {
+        parse_match_pattern(next, patterns)?;
+    }
+
+    Ok(())
+}
+
+fn parse_match_case(pair: Pair<Rule>) -> anyhow::Result<MatchCase> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+
+    let mut expr = vec![];
+    
+    let next = match next.as_rule() {
+        Rule::match_condition => {
+            parse_match_pattern(next, &mut expr)?;
+
+            inner.next().unwrap()
+        },
+        _ => {
+            next
+        }
     };
 
-    Ok(stmt)
+    let case = match next.as_rule() {
+        Rule::block_stmt => {
+            let mut inner = next.into_inner();
+            let next = inner.next().unwrap();
+
+            let body = parse_stmts(next)?;
+
+            MatchCase {
+                patterns: expr,
+                body: body,
+            }
+        },
+        Rule::stmt => {
+            let s = parse_stmt(next)?;
+
+            MatchCase {
+                patterns: expr,
+                body: vec![s],
+            }
+        },
+        _ => {
+            bail!("Parse match case unexpected rule: {:?}", next.as_rule());
+        }
+    };
+
+    Ok(case)
+}
+
+fn parse_match_stmt(pair: Pair<Rule>) -> anyhow::Result<Expr> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+
+    let expr = parse_expr(next)?;
+
+    let mut match_expr = MatchExpr {
+        expr: Box::new(expr),
+        cases: vec![],
+    };
+
+    while let Some(next) = inner.next() {
+        let rule = next.as_rule();
+
+        match rule {
+            Rule::match_case => {
+                let case = parse_match_case(next)?;
+
+                match_expr.cases.push(case);
+            },
+            _ => {
+                bail!("Parse match unexpected rule: {:?}", rule);
+            }
+        }
+    }
+
+    Ok(Expr::Match(match_expr))
 }
 
 pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
@@ -620,7 +771,8 @@ pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
         Rule::const_stmt => parse_const_stmt(next)?,
         Rule::object_stmt => BodyItem::Expr(parse_object_stmt(next)?),
         Rule::type_stmt => BodyItem::Type(parse_type_stmt(next)?),
-        
+        Rule::match_stmt => BodyItem::Expr(parse_match_stmt(next)?),
+        Rule::function_stmt => BodyItem::Expr(Expr::Func(parse_function_stmt(next)?)),
         // Rule::struct_stmt => Stmt::StructStmt(parse_struct_stmt(next)?),
         // Rule::type_stmt => Stmt::TypeStmt(parse_type_stmt(next)?),
         // Rule::enum_stmt => Stmt::EnumStmt(parse_enum_stmt(next)?),

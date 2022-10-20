@@ -84,8 +84,8 @@ non_null_type = {
     identifier
 }
 array_type = { non_null_type ~ "[]" }
-//maybe_type = { (array_type | non_null_type) ~ "?" }
-maybe_type = { non_null_type ~ "?" }
+maybe_type = { (array_type | non_null_type) ~ "?" }
+//maybe_type = { non_null_type ~ "?" }
 type_def = { maybe_type | array_type | non_null_type }
 //type_def = { non_null_type ~ "?"? }
 
@@ -119,7 +119,9 @@ continue_stmt = { "continue" }
 
 function_arg = { identifier ~ type_def? }
 function_args = { function_arg ~ ("," ~ function_arg)* }
-function_stmt = { "async"? ~ "(" ~ function_args? ~ ")" ~ "=>" ~ "{" ~ stmts? ~ "}" }
+normal_func = { "(" ~ function_args? ~ ")" ~ "=>" ~ (block_stmt | stmt) }
+async_func = { "async" ~ normal_func }
+function_stmt = { async_func | normal_func  }
 
 object_stmt_field = { identifier ~ ":" ~ expr }
 object_stmt = { "{" ~ object_stmt_field* ~ "}" }
@@ -130,7 +132,7 @@ else_branch = { "else" ~ "{" ~ stmts? ~ "}" }
 if_stmt = { if_branch ~ else_if_branch* ~ else_branch? }
 
 match_condition = { expr ~ ( "|" ~ match_condition )* }
-match_case = { ( "_" | match_condition ) ~ "=>" ~ stmt }
+match_case = { ( "_" | match_condition ) ~ "=>" ~ block_stmt | stmt }
 match_stmt = { "match" ~ stmt ~ "{" ~ match_case* ~ "}" }
 
 xml_atribute = { identifier ~ "=" ~ ( string_literal | "{" ~ expr ~ "}" ) }
