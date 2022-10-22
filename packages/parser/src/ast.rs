@@ -101,7 +101,7 @@ pub struct IfExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CallExpr {
+pub struct Call {
     pub callee: Box<Expr>,
     pub args: Vec<Expr>,
 }
@@ -124,15 +124,15 @@ pub struct RangeExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForExpr {
-    pub var: Option<String>,
+    pub vars: Vec<Expr>,
     pub expr: Option<Box<Expr>>,
-    pub body: Stmts,
+    pub body: Body,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PropertyAccessExpr {
+pub struct PropAccess {
     pub expr: Box<Expr>,
-    pub property: String,
+    pub prop: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -230,6 +230,59 @@ pub struct ObjExpr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum XmlChild {
+    Xml(Xml),
+    Expr(Expr),
+    Ident(String)
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Xml {
+    pub name: String,
+    pub attrs: Vec<ObjField>,
+    pub children: Vec<XmlChild>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Array {
+    pub items: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectSql {
+    pub fields: Vec<Expr>,
+    pub from: Option<Expr>,
+    pub where_: Option<Expr>,
+    pub group_by: Option<Expr>,
+    pub having: Option<Expr>,
+    pub order_by: Option<Expr>,
+    pub limit: Option<Expr>,
+    pub offset: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct InsertSql {
+    pub table: Expr,
+    pub fields: Vec<Expr>,
+    pub values: Vec<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpdateSql {
+    pub table: Expr,
+    pub fields: Vec<Expr>,
+    pub values: Vec<Expr>,
+    pub where_: Option<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Sql {
+    SelectSql,
+    InsertSql,
+    UpdateSql
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     Const(Const),
     BinOP(BinOP),
@@ -238,6 +291,13 @@ pub enum Expr {
     ObjExpr(ObjExpr),
     Match(MatchExpr),
     Func(Func),
+    For(ForExpr),
+    Call(Call),
+    Range(RangeExpr),
+    PropAccess(PropAccess),
+    Assign(Assign),
+    Array(Array),
+    Xml(Xml),
 }
 
 pub enum Value {
@@ -272,6 +332,12 @@ pub struct BinOP {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Assign {
+    pub target: Box<Expr>,
+    pub value: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     Expr(Expr),
     StructStmt(Struct),
@@ -282,12 +348,7 @@ pub enum Stmt {
     BreakStmt(Option<Box<Stmt>>),
     ReturnStmt(Option<Box<Stmt>>),
     Literal(Literal),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Assign {
-    pub target: Expr,
-    pub value: Expr,
+    Assign(Assign),
 }
 
 #[derive(Debug, Clone, PartialEq)]

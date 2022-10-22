@@ -4,9 +4,10 @@ float = @{ (ASCII_DIGIT)+ ~ "." ~ (ASCII_DIGIT)+ }
 string = { ASCII_ALPHANUMERIC* }
 string_literal = { "\"" ~ string ~ "\"" }
 
-method_call = { "." ~ identifier ~ "(" ~ (stmt ~ ("," ~ stmt)*)? ~ ")" }
-member_access = { "." ~ identifier }
-identifier = @{ (ASCII_ALPHANUMERIC | "_" )+ ~ (method_call | member_access)? }
+method_call = { "." ~ ident ~ "(" ~ (stmt ~ ("," ~ stmt)*)? ~ ")" }
+member_access = { "." ~ ident }
+ident_str = { (ASCII_ALPHANUMERIC | "_" )+ }
+ident = { ident_str ~ (method_call | member_access)? }
 
 WHITESPACE = _{ " " | NEWLINE }
 COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ ANY* }
@@ -39,15 +40,18 @@ factor = {
     float |
     integer |
     bool_lit |
-    identifier | 
+    ident | 
     string_literal
 }
 
 while_expr = { "while" ~ expr ~ "{" ~ stmt ~ "}" }
-for_expr = { "for" ~ (identifier ~ "in" ~ ( range_expr | expr ))? ~ "{" ~ "}" }
 
+idents = { ident ~ ("," ~ ident)* }
+for_expr = { "for" ~ idents ~ "in" ~ range_expr ~ "{" ~ "}" }
 
-range_expr = { expr? ~ ".." ~ expr? }
+range_start = { expr }
+range_end = { expr }
+range_expr = { range_start? ~ ".." ~ range_end? }
 
 // term_op = { multi | divide }
 
@@ -64,9 +68,15 @@ logical_op = {
     logical_neq
 }
 
+// property_access = { ident ~ "." ~ ident }
+assignment_stmt = { ident ~ "=" ~ expr }
+
 expr = {
-    term ~ ((plus | minus) ~ term)* ~ 
-    (logical_op ~ expr)?
+    assignment_stmt |
+    (
+        term ~ ((plus | minus) ~ term)* ~
+        (logical_op ~ expr)?
+    )
 }
 
 int_type = { "int" }
@@ -81,7 +91,7 @@ non_null_type = {
     bool_type | 
     string_type | 
     object_type |
-    identifier
+    ident
 }
 array_type = { non_null_type ~ "[]" }
 maybe_type = { (array_type | non_null_type) ~ "?" }
@@ -89,41 +99,40 @@ maybe_type = { (array_type | non_null_type) ~ "?" }
 type_def = { maybe_type | array_type | non_null_type }
 //type_def = { non_null_type ~ "?"? }
 
-field_decorator = { "@" ~ identifier ~ "(" ~ expr ~ ")" }
+field_decorator = { "@" ~ ident ~ "(" ~ expr ~ ")" }
 
-const_stmt = { "const" ~ identifier ~ type_def? ~ "=" ~ stmt }
-let_stmt = { "let" ~ identifier ~ type_def ~ "=" ~ expr }
-assignment_stmt = { expr ~ "=" ~ expr }
-use_stmt = { "use" ~ identifier }
+const_stmt = { "const" ~ ident ~ type_def? ~ "=" ~ stmt }
+let_stmt = { "let" ~ ident ~ type_def ~ "=" ~ expr }
+use_stmt = { "use" ~ ident }
 
-struct_field = { identifier ~ type_def? ~ ("=" ~ stmt)? }
-struct_stmt = { "struct" ~ identifier  ~ "{" ~ struct_field* ~ "}" }
+struct_field = { ident ~ type_def? ~ ("=" ~ stmt)? }
+struct_stmt = { "struct" ~ ident  ~ "{" ~ struct_field* ~ "}" }
 
-struct_init_field = { identifier ~ ":" ~ stmt }
-struct_init = { identifier ~ "{" ~ struct_init_field* ~ "}" }
+struct_init_field = { ident ~ ":" ~ stmt }
+struct_init = { ident ~ "{" ~ struct_init_field* ~ "}" }
 
-enum_field_object_field = { identifier ~ type_def }
+enum_field_object_field = { ident ~ type_def }
 enum_field_object = { "{" ~ enum_field_object_field* ~ "}" }
-enum_field_tuple = { "(" ~ identifier* ~ ")" }
-enum_field = { identifier ~ (enum_field_object | enum_field_tuple)? }
-enum_stmt = { "enum" ~ identifier ~ "{" ~ enum_field* ~ "}" }
+enum_field_tuple = { "(" ~ ident* ~ ")" }
+enum_field = { ident ~ (enum_field_object | enum_field_tuple)? }
+enum_stmt = { "enum" ~ ident ~ "{" ~ enum_field* ~ "}" }
 
-type_field = { identifier ~ type_def ~ field_decorator* }
+type_field = { ident ~ type_def ~ field_decorator* }
 type_object = { "{" ~ type_field* ~ "}" }
 type_simple = { type_def }
-type_stmt = { "type" ~ identifier ~ "=" ~ (type_object | type_simple) }
+type_stmt = { "type" ~ ident ~ "=" ~ (type_object | type_simple) }
 
 return_stmt = { "return" ~ expr }
 break_stmt = { "break" }
 continue_stmt = { "continue" }
 
-function_arg = { identifier ~ type_def? }
+function_arg = { ident ~ type_def? }
 function_args = { function_arg ~ ("," ~ function_arg)* }
 normal_func = { "(" ~ function_args? ~ ")" ~ "=>" ~ (block_stmt | stmt) }
 async_func = { "async" ~ normal_func }
 function_stmt = { async_func | normal_func  }
 
-object_stmt_field = { identifier ~ ":" ~ expr }
+object_stmt_field = { ident ~ ":" ~ expr }
 object_stmt = { "{" ~ object_stmt_field* ~ "}" }
 
 if_branch = { "if" ~ expr ~ "{" ~ stmts? ~ "}" }
@@ -135,25 +144,30 @@ match_condition = { expr ~ ( "|" ~ match_condition )* }
 match_case = { ( "_" | match_condition ) ~ "=>" ~ block_stmt | stmt }
 match_stmt = { "match" ~ stmt ~ "{" ~ match_case* ~ "}" }
 
-xml_atribute = { identifier ~ "=" ~ ( string_literal | "{" ~ expr ~ "}" ) }
-xml_child = { xml_stmt | identifier | ( "{" ~ identifier ~ "}" ) }
-xml_stmt = { ("<" ~ identifier ~ xml_atribute* ~ ">" ~ xml_child* ~ "</" ~ identifier ~ ">") }
+xml_atribute = { ident ~ "=" ~ ( string_literal | "{" ~ expr ~ "}" ) }
+xml_var = { "{" ~ expr ~ "}" }
+xml_child = { xml_stmt | xml_var | ident }
+xml_start = { "<" ~ ident ~ xml_atribute* ~ ">"}
+xml_end = { "</" ~ ident ~ ">" }
+xml_stmt = { xml_start ~ xml_child* ~ xml_end }
 
 call_args = { stmt ~ ("," ~ stmt)* }
-call_stmt = { identifier ~ "(" ~ call_args? ~ ")" }
+call_stmt = { expr ~ "(" ~ call_args? ~ ")" }
 
 array_items = { stmt ~ ("," ~ stmt)* }
 array_stmt = { "[" ~ array_items* ~ "]" }
 
 
-sql_select_parameters = { identifier ~ ("," ~ identifier)? }
-sql_from = { "from" ~ identifier ~ ("as" ~ identifier)? }
-sql_where_condition = { identifier ~ "==" ~ expr ~ ( ( "and" | "or" ) ~ sql_where_condition )? }
-sql_where = { "where" ~ identifier ~ "==" ~ stmt }
+sql_select_parameters = { ident ~ ("," ~ ident)? }
+sql_from = { "from" ~ ident ~ ("as" ~ ident)? }
+sql_where_condition = { ident ~ "==" ~ expr ~ ( ( "and" | "or" ) ~ sql_where_condition )? }
+sql_where = { "where" ~ ident ~ "==" ~ stmt }
 sql_select = { "select" ~ sql_select_parameters ~ sql_from ~ sql_where }
-sql_insert = { "insert" ~ "into" ~ identifier ~ "(" ~ identifier ~ ")" ~ "values" ~ "(" ~ stmt ~ ")" }
-sql_update = { "update" ~ identifier ~ "set" ~ identifier ~ "=" ~ stmt ~ sql_where }
+sql_insert = { "insert" ~ "into" ~ ident ~ "(" ~ ident ~ ")" ~ "values" ~ "(" ~ stmt ~ ")" }
+sql_update = { "update" ~ ident ~ "set" ~ ident ~ "=" ~ stmt ~ sql_where }
 sql_stmt = { sql_select | sql_insert | sql_update }
+
+
 
 block_stmt = { "{" ~ stmts? ~ "}" }
 
@@ -162,7 +176,6 @@ stmt = {
     for_expr |
     const_stmt |
     let_stmt |
-    assignment_stmt |
     if_stmt |
     use_stmt |
     enum_stmt |

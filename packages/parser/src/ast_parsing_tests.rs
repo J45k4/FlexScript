@@ -3,74 +3,75 @@
 mod tests {
     use std::vec;
 
-    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param};
+    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml};
     use crate::BinOP;
     use crate::BodyItem;
     use crate::Operator;
 
     use super::*;
 
-    // #[test]
-    // fn test_string_literal() {
-    //     let code = r#""qwerty""#;
+    #[test]
+    fn test_parse_string_literal() {
+        let code = r#""qwerty""#;
 
-    //     let ast = parse_text(code).unwrap();
+        let ast = parse_file(code).unwrap();
 
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Const(
+                        Const::String(
+                            "qwerty".to_string()
+                        )
+                    )
+                )
+            ]
+        };
 
+        assert_eq!(ast, expected);
+    }
 
-    //     assert_eq!(ast, AST {
-    //         stmts: vec![
-    //             Stmt::Expr(Expr {
-    //                 left: Term {
-    //                     left: crate::Factor::String("qwerty".to_string()),
-    //                     right: vec![]
-    //                 },
-    //                 right: vec![],
-    //                 terminal: None
-    //             })
-    //         ]
-    //     });
-    // }
+    #[test]
+    fn test_float_literal() {
+        let code = r#"5.5"#;
 
-    // #[test]
-    // fn test_float_literal() {
-    //     let code = r#"5.5"#;
+        let ast = parse_file(code).unwrap();
 
-    //     let ast = parse_text(code).unwrap();
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Const(
+                        Const::Float(
+                            5.5
+                        )
+                    )
+                )
+            ]
+        };
 
-    //     assert_eq!(ast, AST {
-    //         stmts: vec![
-    //             Stmt::Expr(Expr {
-    //                 left: Term {
-    //                     left: crate::Factor::Float(5.5),
-    //                     right: vec![]
-    //                 },
-    //                 right: vec![],
-    //                 terminal: None
-    //             })
-    //         ]
-    //     });
-    // }
+        assert_eq!(ast, expected);
+    }
 
-    // #[test]
-    // fn test_int_literal() {
-    //     let code = r#"5"#;
+    #[test]
+    fn test_int_literal() {
+        let code = r#"5"#;
 
-    //     let ast = parse_text(code).unwrap();
+        let ast = parse_file(code).unwrap();
 
-    //     assert_eq!(ast, AST {
-    //         stmts: vec![
-    //             Stmt::Expr(Expr {
-    //                 left: Term {
-    //                     left: crate::Factor::Int(5),
-    //                     right: vec![]
-    //                 },
-    //                 right: vec![],
-    //                 terminal: None
-    //             })
-    //         ]
-    //     });
-    // }
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Const(
+                        Const::Int(
+                            5
+                        )
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected);
+    }
 
     #[test]
     fn test_parse_simple_equation() {
@@ -137,9 +138,15 @@ mod tests {
             body: vec![
                 BodyItem::Assign(
                     Assign {
-                        target: Expr::Ident("a".to_string()),
-                        value: Expr::Const(
-                            Const::Int(5)
+                        target: Box::new(
+                            Expr::Ident(
+                                "a".to_string()
+                            )
+                        ),
+                        value: Box::new(
+                            Expr::Const(
+                                Const::Int(5)
+                            )
                         )
                     }
                 )
@@ -466,5 +473,222 @@ mod tests {
 
         assert_eq!(ast, expected)
     }
+
+    #[test]
+    fn test_parse_for_range() {
+        let code = r#"
+            for i in 0..10 {
+            }
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::For(
+                        ForExpr {
+                            vars: vec![
+                                Expr::Ident(
+                                    "i".to_string()
+                                )
+                            ],
+                            expr: Some(
+                                Box::new(
+                                    Expr::Range(
+                                        RangeExpr {
+                                            start: Some(Box::new(
+                                                Expr::Const(
+                                                    Const::Int(0)
+                                                )
+                                            )),
+                                            end: Some(Box::new(
+                                                Expr::Const(
+                                                    Const::Int(10)
+                                                )
+                                            ))
+                                        }
+                                    )
+                                )
+                            ),
+                            body: vec![]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn parse_call_expr() {
+        let code = r#"
+            add(1, 2)
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Call(
+                        Call {
+                            callee: Box::new(
+                                Expr::Ident(
+                                    "add".to_string()
+                                )
+                            ),
+                            args: vec![
+                                Expr::Const(
+                                    Const::Int(1)
+                                ),
+                                Expr::Const(
+                                    Const::Int(2)
+                                )
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn parse_assign_to_property() {
+        let code = r#"
+            person.name = "John"
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Assign(
+                        Assign {
+                            target: Box::new(Expr::PropAccess(
+                                PropAccess {
+                                    expr: Box::new(
+                                        Expr::Ident(
+                                            "person".to_string()
+                                        )
+                                    ),
+                                    prop: Box::new(Expr::Ident("name".to_string()))
+                                }
+                            )),
+                            value: Box::new(Expr::Const(
+                                Const::String("John".to_string())
+                            ))
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_array() {
+        let code = r#"
+            [1, 2, 3]
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Array(
+                        Array {
+                            items: vec![
+                                Expr::Const(
+                                    Const::Int(1)
+                                ),
+                                Expr::Const(
+                                    Const::Int(2)
+                                ),
+                                Expr::Const(
+                                    Const::Int(3)
+                                )
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_xml() {
+        let code = r#"<div></div>"#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Xml(
+                        Xml {
+                            name: "div".to_string(),
+                            attrs: vec![],
+                            children: vec![]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    // #[test]
+    // fn test_parse_sql() {
+    //     let code = r#"select id, name from people where id == 1"#;
+
+    //     let ast = parse_file(code).unwrap();
+
+    //     let expected = CodeFile {
+    //         body: vec![
+    //             BodyItem::Expr(
+    //                 Expr::Sql(
+    //                     Sql {
+    //                         select: vec![
+    //                             "id".to_string(),
+    //                             "name".to_string()
+    //                         ],
+    //                         from: "people".to_string(),
+    //                         where_: Some(
+    //                             Box::new(
+    //                                 Expr::BinOP(
+    //                                     BinOP {
+    //                                         left: Box::new(
+    //                                             Expr::Ident(
+    //                                                 "id".to_string()
+    //                                             )
+    //                                         ),
+    //                                         op: Operator::Eq,
+    //                                         right: Box::new(
+    //                                             Expr::Const(
+    //                                                 Const::Int(1)
+    //                                             )
+    //                                         )
+    //                                     }
+    //                                 )
+    //                             )
+    //                         )
+    //                     }
+    //                 )
+    //             )
+    //         ]
+    //     };
+
+    //     assert_eq!(ast, expected)
+    // }
 }
 
