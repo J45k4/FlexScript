@@ -3,12 +3,10 @@
 mod tests {
     use std::vec;
 
-    use crate::{parse_text, Stmt, AST, Expr, Literal, Term, ExprRightSide, ExprOperator, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml};
+    use crate::{Expr, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml};
     use crate::BinOP;
     use crate::BodyItem;
     use crate::Operator;
-
-    use super::*;
 
     #[test]
     fn test_parse_string_literal() {
