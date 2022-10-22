@@ -1,6 +1,6 @@
 use args::Args;
 use clap::Parser;
-use flexscript_parser::{parse_raw_ast, parse_text};
+use flexscript_parser::{parse_raw_ast, parse_file};
 
 mod args;
 
@@ -22,7 +22,7 @@ fn main() {
 
             let text = std::fs::read_to_string(a.path).unwrap();
 
-            let ast = parse_text(&text).unwrap();
+            let ast = parse_file(&text).unwrap();
 
             println!("{:#?}", ast);
         }
