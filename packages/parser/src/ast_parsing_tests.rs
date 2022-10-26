@@ -3,7 +3,7 @@
 mod tests {
     use std::vec;
 
-    use crate::{Expr, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml};
+    use crate::{Expr, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml, XmlChild};
     use crate::BinOP;
     use crate::BodyItem;
     use crate::Operator;
@@ -643,6 +643,93 @@ mod tests {
         };
 
         assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_xml2() {
+        let code = r#"<div>{a}</div>"#;
+
+        let rawast = parse_raw_ast(code).unwrap();
+
+        println!("{:#?}", rawast);
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Xml(
+                        Xml {
+                            name: "div".to_string(),
+                            attrs: vec![],
+                            children: vec![
+                                XmlChild::Expr(
+                                    Expr::Ident(
+                                        "a".to_string()
+                                    )
+                                )
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_xml3() {
+        let code = r#"<div>abc</div>"#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = CodeFile {
+            body: vec![
+                BodyItem::Expr(
+                    Expr::Xml(
+                        Xml {
+                            name: "div".to_string(),
+                            attrs: vec![],
+                            children: vec![
+                                XmlChild::Ident(
+                                    "abc".to_string()
+                                )
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_react_style_component() {
+        let code = r#"export default (chatroomId Int, ctx) => {
+            return (
+                <div>
+                    {ctx.db.chatroom.fetch(chatroomId).messages.map(p => 
+                        <div>
+                            <p>{p.text}</p>
+                            <p>{p.user.name}</p>
+                        </div>
+                    )}
+                    <input type="text" value={ctx.state.message} />
+                    <button onClick={() => {
+                        ctx.sendMessage({
+                            text: ctx.state.message
+                            chatroomId: chatroomId 
+                        })
+                    }}>
+                        Send
+                    </button>
+                </div>
+            )
+        }"#;
+
+        let ast = parse_file(code).unwrap();
     }
 
     // #[test]

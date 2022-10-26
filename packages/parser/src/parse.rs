@@ -425,8 +425,14 @@ fn member_access(pair: Pair<Rule>) -> anyhow::Result<Expr> {
 //     Ok(member_call)
 // }
 
+fn parse_ident_str(pair: Pair<Rule>) -> String {
+    let ident = pair.as_str().trim().to_string();
+
+    ident
+}
+
 fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<Expr> {
-    println!("parse ident");
+    println!("parse ident", pair);
 
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
@@ -435,7 +441,7 @@ fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<Expr> {
     println!("parse ident rule: {:?}", rule);
 
     let ident_str = match rule {
-        Rule::ident_str => next.as_str().to_string(),
+        Rule::ident_str => parse_ident_str(next),
         _ => {
             bail!("Parse ident unexpected rule: {:?}", next.as_rule());
         }
@@ -572,7 +578,10 @@ pub fn parse_factor(pair: Pair<Rule>) -> anyhow::Result<Expr> {
             
             Expr::Const(Const::Int(val))
         },
-        Rule::ident => Expr::Ident(next.as_str().to_string()),
+        Rule::ident => {
+            parse_ident(next)?
+        }
+        //Rule::ident => Expr::Ident(next.as_str().to_string()),
         // Rule::expr => Factor::Expr(parse_expr(next)?),
         _ => {
             return Err(anyhow::anyhow!("Parse factor unexpected rule: {:?}", next.as_rule()));
@@ -623,7 +632,7 @@ fn parse_const_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
 
-    let name = next.as_str().to_string();
+    let name = next.as_str().trim().to_string();
 
     let next = inner.next().unwrap();
 
@@ -656,6 +665,8 @@ fn parse_non_null_type(pair: Pair<Rule>) -> anyhow::Result<NonNullType> {
             NonNullType::Bool
         },
         Rule::ident => {
+
+
             NonNullType::Identifier(next.as_str().to_string())
         }
         _ => {
@@ -1047,12 +1058,49 @@ fn parse_array_stmt(pair: Pair<Rule>) -> anyhow::Result<Array> {
     Ok(arr)
 }
 
+fn parse_xml_child(ast: Pair<Rule>) -> anyhow::Result<XmlChild> {
+    println!("parse_xml_child");
+
+    let rule = ast.as_rule();
+
+    match rule {
+        Rule::xml_stmt => {
+            let mut inner = ast.into_inner();
+            let next = inner.next().unwrap();
+
+            let tag = parse_xml_stmt(next)?;
+
+            Ok(XmlChild::Xml(tag))
+        },
+        Rule::xml_var => {
+            let mut inner = ast.into_inner();
+            let next = inner.next().unwrap();
+
+            let e = parse_expr(next)?;
+
+            Ok(XmlChild::Expr(e))
+        },
+        Rule::ident_str => {
+            let ident = parse_ident_str(ast);
+
+            Ok(XmlChild::Ident(ident))
+        },
+        _ => {
+            bail!("Parse xml child unexpected rule: {:?}", rule);
+        }
+    }
+}
+
 fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
+    println!("parse_xml_stmt");
+
     let mut inner = ast.into_inner();
     let next = inner.next().unwrap();
 
     let name = match next.as_rule() {
         Rule::xml_start => {
+            println!("parse_xml_stmt xml start");
+
             let mut inner = next.into_inner();
             let next = inner.next().unwrap();
             let mut inner = next.into_inner();
@@ -1076,11 +1124,23 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
 
         let x = match rule {
             Rule::xml_stmt => {
+                println!("parse_xml_stmt xml stmt");
+
                 XmlChild::Xml(
                     parse_xml_stmt(next)?
                 )
             },
+            Rule::xml_child => {
+                println!("parse_xml_stmt xml child");
+
+                let mut inner = next.into_inner();
+                let next = inner.next().unwrap();
+
+                parse_xml_child(next)?
+            },
             Rule::xml_var => {
+                println!("parse_xml_stmt xml var");
+
                 let mut inner = next.into_inner();
 
                 let next = inner.next().unwrap();
@@ -1090,6 +1150,8 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
                 XmlChild::Expr(e)
             },
             Rule::ident => {
+                println!("parse_xml_stmt ident");
+
                 let mut inner = next.into_inner();
 
                 let next = inner.next().unwrap();
@@ -1106,6 +1168,7 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
                 }
             },
             Rule::xml_end => {
+                println!("parse_xml_stmt xml end");
                 break;
             },
             _ => {
@@ -1120,6 +1183,8 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
 }
 
 pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
+    println!("parse_stmt");
+
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
     let rule = next.as_rule();
