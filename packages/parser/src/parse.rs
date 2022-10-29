@@ -3,7 +3,7 @@ use std::{any, vec};
 use anyhow::{Ok, bail};
 use pest::iterators::{Pair, Pairs};
 
-use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, Func, BodyItem, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType, MatchCase, MatchExpr, Body, Param, RangeExpr, ForExpr, Call, PropAccess, Array, Xml, XmlChild};
+use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, Func, Item, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType, MatchCase, MatchExpr, Body, Param, RangeExpr, ForExpr, Call, PropAccess, Array, Xml, XmlChild, Export, Return};
 
 fn parse_break_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
 
@@ -151,6 +151,8 @@ fn parse_args(pair: Pair<Rule>) -> anyhow::Result<Vec<Param>> {
 }
 
 fn parse_block(pair: Pair<Rule>) -> anyhow::Result<Body> {
+    println!("parse_block");
+
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
 
@@ -202,6 +204,8 @@ fn parse_async_func(pair: Pair<Rule>) -> anyhow::Result<Func> {
 }
 
 fn parse_function_stmt(pair: Pair<Rule>) -> anyhow::Result<Func> {
+    println!("parse_function_stmt");
+
     let mut inner = pair.into_inner();
 
     let next = inner.next().unwrap();
@@ -425,6 +429,58 @@ fn member_access(pair: Pair<Rule>) -> anyhow::Result<Expr> {
 //     Ok(member_call)
 // }
 
+fn parse_call_args(pair: Pair<Rule>) -> anyhow::Result<Vec<Expr>> {
+    let mut inner = pair.into_inner();
+    let mut args = vec![];
+
+    while let Some(next) = inner.next() {
+        let rule = next.as_rule();
+
+        match rule {
+            Rule::expr => {
+                args.push(parse_expr(next)?);
+            },
+            Rule::stmt => {
+                args.push(parse_expr(next)?);
+            },
+            _ => {
+                bail!("Parse call args unexpected rule: {:?}", rule);
+            }
+        }
+    }
+
+    Ok(args)
+}
+
+fn parse_method_call(pair: Pair<Rule>) -> anyhow::Result<Expr> {
+    println!("parse_method_call");
+
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
+
+    println!("parse_method_call rule {:?}", rule);
+
+    let callee = match rule {
+        Rule::ident => {
+            parse_ident(next)?
+        },
+        _ => {
+            bail!("Parse method call unexpected rule: {:?}", rule);
+        }
+    };
+
+    let next = inner.next().unwrap();
+    let args = parse_call_args(next)?;
+
+    let method_call = Call {
+        callee: Box::new(callee),
+        args: args
+    };
+
+    Ok(Expr::Call(method_call))
+}
+
 fn parse_ident_str(pair: Pair<Rule>) -> String {
     let ident = pair.as_str().trim().to_string();
 
@@ -432,13 +488,13 @@ fn parse_ident_str(pair: Pair<Rule>) -> String {
 }
 
 fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<Expr> {
-    println!("parse ident", pair);
+    println!("parse ident");
 
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
     let rule = next.as_rule();
 
-    println!("parse ident rule: {:?}", rule);
+    println!("parse ident inner rule {:?}", rule);
 
     let ident_str = match rule {
         Rule::ident_str => parse_ident_str(next),
@@ -455,6 +511,8 @@ fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<Expr> {
         Some(next) => {
             match next.as_rule() {
                 Rule::member_access => {
+                    println!("parse_ident member_access");
+
                     let e = member_access(next)?;
 
                     let p = PropAccess {
@@ -468,9 +526,25 @@ fn parse_ident(pair: Pair<Rule>) -> anyhow::Result<Expr> {
 
                     Expr::PropAccess(p)
                 },
-                // Rule::method_call => {
+                Rule::method_call => {
+                    println!("parse_ident method_call");
+
                     
-                // },
+
+                    let mut inner = next.into_inner();
+                    let next = inner.next().unwrap();
+
+                    let call = Call {
+                        callee: Box::new(
+                            Expr::Ident(
+                                ident_str
+                            )
+                        ),
+                        args: parse_call_args(next)?
+                    };
+
+                    Expr::Call(call)
+                },
                 _ => {
                     bail!("Parse ident unexpected rule: {:?}", next.as_rule());
                 }
@@ -504,7 +578,10 @@ fn parse_expr_inner(mut inner: Pairs<Rule>) -> anyhow::Result<Expr> {
         },
         Rule::assignment_stmt => {
             Expr::Assign(parse_assign(next)?)
-        }
+        },
+        Rule::call_stmt => {
+            Expr::Call(parse_call_stmt(next)?)
+        },
         // Rule::property_access => {
         //     parse_property_access(next)?
         // },
@@ -628,7 +705,7 @@ fn parse_object_stmt(pair: Pair<Rule>) -> anyhow::Result<Expr> {
     Ok(Expr::ObjExpr(expr))
 }
 
-fn parse_const_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
+fn parse_const_stmt(pair: Pair<Rule>) -> anyhow::Result<Item> {
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
 
@@ -643,7 +720,7 @@ fn parse_const_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
         value: expr,
     };
 
-    Ok(BodyItem::Const(stmt))
+    Ok(Item::Const(stmt))
 }
 
 fn parse_non_null_type(pair: Pair<Rule>) -> anyhow::Result<NonNullType> {
@@ -948,7 +1025,7 @@ fn parse_idents(pair: Pair<Rule>) -> anyhow::Result<Vec<Expr>> {
 }
 
 fn parse_for_expr(pair: Pair<Rule>) -> anyhow::Result<ForExpr> {
-    println!("Parse for expr: {:#?}", pair);
+    println!("parse_for_expr");
 
     let mut inner = pair.into_inner();
 
@@ -976,28 +1053,7 @@ fn parse_for_expr(pair: Pair<Rule>) -> anyhow::Result<ForExpr> {
     Ok(f)
 }
 
-fn parse_call_args(pair: Pair<Rule>) -> anyhow::Result<Vec<Expr>> {
-    let mut inner = pair.into_inner();
-    let mut args = vec![];
 
-    while let Some(next) = inner.next() {
-        let rule = next.as_rule();
-
-        match rule {
-            Rule::expr => {
-                args.push(parse_expr(next)?);
-            },
-            Rule::stmt => {
-                args.push(parse_expr(next)?);
-            },
-            _ => {
-                bail!("Parse call args unexpected rule: {:?}", rule);
-            }
-        }
-    }
-
-    Ok(args)
-}
 
 fn parse_call_stmt(pair: Pair<Rule>) -> anyhow::Result<Call> {
     let mut inner = pair.into_inner();
@@ -1059,7 +1115,7 @@ fn parse_array_stmt(pair: Pair<Rule>) -> anyhow::Result<Array> {
 }
 
 fn parse_xml_child(ast: Pair<Rule>) -> anyhow::Result<XmlChild> {
-    println!("parse_xml_child");
+    println!("parse_xml_child {:#?}", ast);
 
     let rule = ast.as_rule();
 
@@ -1112,6 +1168,8 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
             bail!("Parse xml stmt unexpected rule: {:?}", next.as_rule());
         }
     };
+
+    println!("parse_xml_stmt name {:?}", name);
 
     let mut xml = Xml {
         name: name,
@@ -1182,27 +1240,138 @@ fn parse_xml_stmt(ast: Pair<Rule>) -> anyhow::Result<Xml> {
     Ok(xml)
 }
 
-pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
-    println!("parse_stmt");
+fn parse_default_export(pair: Pair<Rule>) -> anyhow::Result<Export> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+
+    let export = Export {
+        item: Box::new(parse_stmt(next)?),
+        default: true,
+        name: None,
+    };
+
+    Ok(export)
+}
+
+fn parse_named_export(pair: Pair<Rule>) -> anyhow::Result<Export> {
+    let mut inner = pair.into_inner();
+    let next = inner.next().unwrap();
+
+    let ident = parse_ident_str(next);
+
+    let next = inner.next().unwrap();
+
+    let b = parse_stmt(next)?;
+
+    let export = Export {
+        item: Box::new(b),
+        default: false,
+        name: Some(ident),
+    };
+
+    Ok(export)
+}
+
+fn parse_export(ast: Pair<Rule>) -> anyhow::Result<Export> {
+    println!("parse_export");
+
+    let mut inner = ast.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
+
+    let e = match rule {
+        Rule::default_export => {
+            parse_default_export(next)?
+        },
+        Rule::named_export => {
+            parse_named_export(next)?
+        },
+        _ => {
+            bail!("Parse export unexpected rule: {:?}", rule);
+        }
+    };
+
+
+    // let mut e = Export {
+    //     name: None,
+    //     expr: None,
+    // };
+
+    // match 
+
+    // match next.as_rule() {
+    //     Rule::ident => {
+    //         let ident = parse_ident(next);
+
+    //         e.name = Some(ident);
+    //     },
+    //     Rule::expr => {
+    //         let expr = parse_expr(next)?;
+
+    //         e.expr = Some(Box::new(expr));
+    //     },
+    //     _ => {
+    //         bail!("Parse export unexpected rule: {:?}", next.as_rule());
+    //     }
+    // };
+
+    Ok(e)
+}
+
+fn parse_return(ast: Pair<Rule>) -> anyhow::Result<Return> {
+    println!("parse_return");
+
+    let mut inner = ast.into_inner();
+    let next = inner.next().unwrap();
+    let rule = next.as_rule();
+
+    println!("parse_return rule: {:?}", rule);
+
+    let item = match rule {
+        Rule::expr => {
+            Item::Expr(parse_expr(next)?)
+        },
+        Rule::stmt => {
+            parse_stmt(next)?
+        },
+        _ => {
+            bail!("Parse return unexpected rule: {:?}", rule);
+        }
+    };
+
+    let ret = Return {
+        items: vec![item],
+    };
+
+    Ok(ret)
+}
+
+pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<Item> {
+    println!("parse_stmt {:?}", pair.as_rule());
 
     let mut inner = pair.into_inner();
     let next = inner.next().unwrap();
     let rule = next.as_rule();
 
+    println!("parse_stmt inner rule {:?}", rule);
+
     let item = match rule {
-        Rule::expr => BodyItem::Expr(parse_expr(next)?),
+        Rule::expr => Item::Expr(parse_expr(next)?),
         // Rule::assignment_stmt => BodyItem::Assign(parse_assignment_stmt(next)?),
-        Rule::if_stmt => BodyItem::Expr(parse_if_stmt(next)?),
+        Rule::if_stmt => Item::Expr(parse_if_stmt(next)?),
         Rule::const_stmt => parse_const_stmt(next)?,
-        Rule::object_stmt => BodyItem::Expr(parse_object_stmt(next)?),
-        Rule::type_stmt => BodyItem::Type(parse_type_stmt(next)?),
-        Rule::match_stmt => BodyItem::Expr(parse_match_stmt(next)?),
-        Rule::function_stmt => BodyItem::Expr(Expr::Func(parse_function_stmt(next)?)),
-        Rule::range_expr => BodyItem::Expr(Expr::Range(parse_range_expr(next)?)),    
-        Rule::for_expr => BodyItem::Expr(Expr::For(parse_for_expr(next)?)),
-        Rule::call_stmt => BodyItem::Expr(Expr::Call(parse_call_stmt(next)?)),
-        Rule::array_stmt => BodyItem::Expr(Expr::Array(parse_array_stmt(next)?)),
-        Rule::xml_stmt => BodyItem::Expr(Expr::Xml(parse_xml_stmt(next)?)),
+        Rule::object_stmt => Item::Expr(parse_object_stmt(next)?),
+        Rule::type_stmt => Item::Type(parse_type_stmt(next)?),
+        Rule::match_stmt => Item::Expr(parse_match_stmt(next)?),
+        Rule::function_stmt => Item::Expr(Expr::Func(parse_function_stmt(next)?)),
+        Rule::range_expr => Item::Expr(Expr::Range(parse_range_expr(next)?)),    
+        Rule::for_expr => Item::Expr(Expr::For(parse_for_expr(next)?)),
+        Rule::call_stmt => Item::Expr(Expr::Call(parse_call_stmt(next)?)),
+        Rule::array_stmt => Item::Expr(Expr::Array(parse_array_stmt(next)?)),
+        Rule::xml_stmt => Item::Expr(Expr::Xml(parse_xml_stmt(next)?)),
+        Rule::export => Item::Export(parse_export(next)?),
+        Rule::return_stmt => Item::Return(parse_return(next)?),
+        Rule::term => Item::Expr(parse_term(next)?),
         // Rule::struct_stmt => Stmt::StructStmt(parse_struct_stmt(next)?),
         // Rule::type_stmt => Stmt::TypeStmt(parse_type_stmt(next)?),
         // Rule::enum_stmt => Stmt::EnumStmt(parse_enum_stmt(next)?),
@@ -1218,31 +1387,33 @@ pub fn parse_stmt(pair: Pair<Rule>) -> anyhow::Result<BodyItem> {
     Ok(item)
 }
 
-pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Vec<BodyItem>> {
+pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Vec<Item>> {
+    println!("parse_stmts");
+
     let mut items = vec![];
 
-    for pair in pair.into_inner() {
-        let rule = pair.as_rule();
+    let rule = pair.as_rule();
 
-        match rule {
-            Rule::stmts => {
-                let inner = pair.into_inner();
+    println!("parse_stmts inner next rule: {:?}", rule);
 
-                for pair in inner {
-                    let rule = pair.as_rule();
+    match rule {
+        Rule::stmts => {
+            let inner = pair.into_inner();
 
-                    match rule {
-                        Rule::stmt => {
-                            let stmt = parse_stmt(pair)?;
-                            items.push(stmt);
-                        }
-                        _ => {}
+            for pair in inner {
+                let rule = pair.as_rule();
+
+                match rule {
+                    Rule::stmt => {
+                        let stmt = parse_stmt(pair)?;
+                        items.push(stmt);
                     }
+                    _ => {}
                 }
             }
-            Rule::EOI => (),
-            _ => {}
         }
+        Rule::EOI => (),
+        _ => {}
     }
 
     Ok(items)

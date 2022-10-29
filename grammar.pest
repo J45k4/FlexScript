@@ -4,7 +4,9 @@ float = @{ (ASCII_DIGIT)+ ~ "." ~ (ASCII_DIGIT)+ }
 string = { ASCII_ALPHANUMERIC* }
 string_literal = { "\"" ~ string ~ "\"" }
 
-method_call = { "." ~ ident ~ "(" ~ (stmt ~ ("," ~ stmt)*)? ~ ")" ~ (method_call | member_access) }
+call_args = { stmt ~ ("," ~ stmt)* }
+
+method_call = { "(" ~ call_args? ~ ")" ~ (method_call | member_access)? }
 member_access = { "." ~ ident }
 ident_str = @{ (ASCII_ALPHANUMERIC | "_" )+ }
 ident = { ident_str ~ (method_call | member_access)? }
@@ -122,7 +124,7 @@ type_object = { "{" ~ type_field* ~ "}" }
 type_simple = { type_def }
 type_stmt = { "type" ~ ident ~ "=" ~ (type_object | type_simple) }
 
-return_stmt = { "return" ~ expr }
+return_stmt = { "return" ~ ( "(" ~ stmt ~ ")" | stmt ) }
 break_stmt = { "break" }
 continue_stmt = { "continue" }
 
@@ -151,7 +153,6 @@ xml_start = { "<" ~ ident ~ xml_atribute*}
 xml_end = { "</" ~ ident ~ ">" }
 xml_stmt = { xml_start ~ ("/>" | ">" ~ xml_child* ~ xml_end) }
 
-call_args = { stmt ~ ("," ~ stmt)* }
 call_stmt = { expr? ~ "(" ~ call_args? ~ ")" }
 
 array_items = { stmt ~ ("," ~ stmt)* }
@@ -168,7 +169,7 @@ sql_update = { "update" ~ ident ~ "set" ~ ident ~ "=" ~ stmt ~ sql_where }
 sql_stmt = { sql_select | sql_insert | sql_update }
 
 default_export = { "export" ~ "default" ~ stmt }
-named_export = { "export" ~ ident ~ stmt }
+named_export = { "export" ~ ident_str ~ stmt }
 
 export = { default_export | named_export }
 

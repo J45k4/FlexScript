@@ -8,6 +8,8 @@ mod parser_gen;
 mod parser_tests;
 mod ast_parsing_tests;
 mod parse;
+mod token;
+mod manual_parser;
 
 pub use ast::*;
 
@@ -19,8 +21,8 @@ pub fn parse_raw_ast(input: &str) -> anyhow::Result<Pairs<Rule>> {
     Ok(pairs)
 }
 
-pub fn parse_file(input: &str) -> anyhow::Result<CodeFile> {
-    let mut file = CodeFile {
+pub fn parse_file(input: &str) -> anyhow::Result<Ast> {
+    let mut file = Ast {
         body: vec![]
     };
 
@@ -29,7 +31,10 @@ pub fn parse_file(input: &str) -> anyhow::Result<CodeFile> {
     for pair in pairs {
         match pair.as_rule() {
             Rule::file => {
-                let stmt = parse::parse_stmts(pair)?;
+                let mut inner = pair.into_inner();
+                let next = inner.next().unwrap();
+
+                let stmt = parse::parse_stmts(next)?;
                 file.body.extend(stmt);
             }
             Rule::EOI => {}

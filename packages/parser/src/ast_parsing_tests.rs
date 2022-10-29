@@ -2,10 +2,9 @@
 #[cfg(test)]
 mod tests {
     use std::vec;
-
-    use crate::{Expr, parse_raw_ast, parse_file, CodeFile, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml, XmlChild};
+    use crate::{Expr, parse_raw_ast, parse_file, Ast, Const, Assign, StructField, Struct, VarType, NonNullType, If, IfBranch, ConstStmt, ObjExpr, ObjField, TypeStmt, TypeField, MatchCase, MatchExpr, Func, Param, ForExpr, Call, RangeExpr, PropAccess, Array, Xml, XmlChild, Export, Return};
     use crate::BinOP;
-    use crate::BodyItem;
+    use crate::Item;
     use crate::Operator;
 
     #[test]
@@ -14,9 +13,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Const(
                         Const::String(
                             "qwerty".to_string()
@@ -35,9 +34,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Const(
                         Const::Float(
                             5.5
@@ -56,9 +55,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Const(
                         Const::Int(
                             5
@@ -77,9 +76,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::BinOP(
                         BinOP {
                             left: Box::new(
@@ -132,9 +131,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        assert_eq!(ast, CodeFile {
+        assert_eq!(ast, Ast {
             body: vec![
-                BodyItem::Assign(
+                Item::Assign(
                     Assign {
                         target: Box::new(
                             Expr::Ident(
@@ -163,9 +162,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        assert_eq!(ast, CodeFile {
+        assert_eq!(ast, Ast {
             body: vec![
-                BodyItem::Struct(
+                Item::Struct(
                     Struct {
                         name: "Foo".to_string(),
                         fields: vec![
@@ -206,9 +205,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::If(
                         If {
                             branches: vec![
@@ -268,9 +267,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Const(
+                Item::Const(
                     ConstStmt {
                         ident: "person".to_string(),
                         value: Expr::ObjExpr(
@@ -315,9 +314,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Type(
+                Item::Type(
                     TypeStmt {
                         name: "Person".to_string(),
                         fields: vec![
@@ -366,9 +365,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Match(
                         MatchExpr {
                             expr: Box::new(
@@ -380,7 +379,7 @@ mod tests {
                                 MatchCase {
                                     patterns: vec![Expr::Const(Const::Int(5))],
                                     body: vec![
-                                        BodyItem::Expr(    
+                                        Item::Expr(    
                                             Expr::Const(
                                                 Const::Int(10)
                                             )
@@ -390,7 +389,7 @@ mod tests {
                                 MatchCase {
                                     patterns: vec![Expr::Const(Const::Int(10))],
                                     body: vec![
-                                        BodyItem::Expr (
+                                        Item::Expr (
                                             Expr::Const(
                                                 Const::Int(20)
                                             )
@@ -400,7 +399,7 @@ mod tests {
                                 MatchCase {
                                     patterns: vec![],
                                     body: vec![
-                                        BodyItem::Expr (
+                                        Item::Expr (
                                             Expr::Const(
                                                 Const::Int(30)
                                             )
@@ -425,9 +424,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Const(
+                Item::Const(
                     ConstStmt {
                         ident: "add".to_string(),
                         value: Expr::Func(
@@ -444,7 +443,64 @@ mod tests {
                                     }
                                 ],
                                 body: vec![
-                                    BodyItem::Expr(
+                                    Item::Expr(
+                                        Expr::BinOP(
+                                            BinOP {
+                                                left: Box::new(
+                                                    Expr::Ident(
+                                                        "a".to_string()
+                                                    )
+                                                ),
+                                                op: Operator::Add,
+                                                right: Box::new(
+                                                    Expr::Ident(
+                                                        "b".to_string()
+                                                    )
+                                                )
+                                            }
+                                        )
+                                    )
+                                ]
+                            }
+                        )
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_arrow_func2() {
+        let code = r#"
+            const add = (a, b) => {
+                a + b
+            }
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = Ast {
+            body: vec![
+                Item::Const(
+                    ConstStmt {
+                        ident: "add".to_string(),
+                        value: Expr::Func(
+                            Func {
+                                is_async: false,
+                                params: vec![
+                                    Param {
+                                        name: "a".to_string(),
+                                        typ: None
+                                    },
+                                    Param {
+                                        name: "b".to_string(),
+                                        typ: None
+                                    }
+                                ],
+                                body: vec![
+                                    Item::Expr(
                                         Expr::BinOP(
                                             BinOP {
                                                 left: Box::new(
@@ -481,9 +537,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::For(
                         ForExpr {
                             vars: vec![
@@ -527,9 +583,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Call(
                         Call {
                             callee: Box::new(
@@ -562,9 +618,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Assign(
                         Assign {
                             target: Box::new(Expr::PropAccess(
@@ -597,9 +653,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Array(
                         Array {
                             items: vec![
@@ -628,9 +684,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Xml(
                         Xml {
                             name: "div".to_string(),
@@ -655,9 +711,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Xml(
                         Xml {
                             name: "div".to_string(),
@@ -684,9 +740,9 @@ mod tests {
 
         let ast = parse_file(code).unwrap();
 
-        let expected = CodeFile {
+        let expected = Ast {
             body: vec![
-                BodyItem::Expr(
+                Item::Expr(
                     Expr::Xml(
                         Xml {
                             name: "div".to_string(),
@@ -694,6 +750,133 @@ mod tests {
                             children: vec![
                                 XmlChild::Ident(
                                     "abc".to_string()
+                                )
+                            ]
+                        }
+                    )
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_return() {
+        let code = r#"
+            return 1
+        "#;
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = Ast {
+            body: vec![
+                Item::Return(
+                    Return {
+                        items: vec![
+                            Item::Expr(
+                                Expr::Const(
+                                    Const::Int(1)
+                                )
+                            )
+                        ]
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn tes_parse_return_with_curvy_braces() {
+        let code = r#"
+            return (
+                1
+            )
+        "#;
+
+        let rawast = parse_raw_ast(code).unwrap();
+
+        println!("{:#?}", rawast);
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = Ast {
+            body: vec![
+                Item::Return(
+                    Return {
+                        items: vec![
+                            Item::Expr(
+                                Expr::Const(
+                                    Const::Int(1)
+                                )
+                            )
+                        ]
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
+    }
+
+    #[test]
+    fn test_parse_method_call() {
+        let code = r#"chatroom.fetch(1)"#;
+
+        let rawast = parse_raw_ast(code).unwrap();
+
+        println!("{:#?}", rawast);
+
+        let ast = parse_file(code).unwrap();
+
+        let expected = Ast {
+            body: vec![
+                Item::Expr(
+                    Expr::Call(
+                        Call {
+                            callee: Box::new(
+                                Expr::PropAccess(
+                                    PropAccess {
+                                        expr: Box::new(
+                                            Expr::PropAccess(
+                                                PropAccess {
+                                                    expr: Box::new(
+                                                        Expr::PropAccess(
+                                                            PropAccess {
+                                                                expr: Box::new(
+                                                                    Expr::Ident(
+                                                                        "ctx".to_string()
+                                                                    )
+                                                                ),
+                                                                prop: Box::new(
+                                                                    Expr::Ident(
+                                                                        "db".to_string()
+                                                                    )
+                                                                )
+                                                            }
+                                                        )
+                                                    ),
+                                                    prop: Box::new(
+                                                        Expr::Ident(
+                                                            "chatroom".to_string()
+                                                        )
+                                                    )
+                                                }
+                                            )
+                                        ),
+                                        prop: Box::new(
+                                            Expr::Ident(
+                                                "fetch".to_string()
+                                            )
+                                        )
+                                    }
+                                )
+                            ),
+                            args: vec![
+                                Expr::Const(
+                                    Const::Int(1)
                                 )
                             ]
                         }
@@ -729,7 +912,35 @@ mod tests {
             )
         }"#;
 
+        // let rawast = parse_raw_ast(code).unwrap();
+
+        // println!("{:#?}", rawast);
+
         let ast = parse_file(code).unwrap();
+
+        let expected = Ast {
+            body: vec![
+                Item::Export(
+                    Export {
+                        name: None,
+                        default: true,
+                        item: Box::new( 
+                            Item::Expr(
+                                Expr::Func(
+                                    Func {
+                                        body: vec![],
+                                        params: vec![],
+                                        is_async: false
+                                    }
+                                )
+                            )
+                        )
+                    }
+                )
+            ]
+        };
+
+        assert_eq!(ast, expected)
     }
 
     // #[test]
@@ -740,7 +951,7 @@ mod tests {
 
     //     let expected = CodeFile {
     //         body: vec![
-    //             BodyItem::Expr(
+    //             Item::Expr(
     //                 Expr::Sql(
     //                     Sql {
     //                         select: vec![

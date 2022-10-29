@@ -25,7 +25,7 @@ pub struct Param {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
-    String(String),
+    Str(String),
     Int(i64),
     Float(f64),
     Bool(bool)
@@ -358,26 +358,36 @@ pub struct ConstStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum BodyItem {
+pub struct Export {
+    pub default: bool,
+    pub name: Option<String>,
+    pub item: Box<Item>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Return {
+    pub items: Vec<Item>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Item {
     Expr(Expr),
     Assign(Assign),
     Identifier(String),
     Struct(Struct),
     Const(ConstStmt),
     Type(TypeStmt),
+    Export(Export),
+    Return(Return),
+    Literal(Literal),
 }
 
-pub type Body = Vec<BodyItem>;
+pub type Body = Vec<Item>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CodeFile {
+pub struct Ast {
     pub body: Body,
 }
 
 
 pub type Stmts = Vec<Stmt>;
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct AST {
-    pub stmts: Stmts
-}
