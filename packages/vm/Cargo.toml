@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 flexscript_parser = { path = "../parser" }
+log = "0.4"

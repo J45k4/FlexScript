@@ -8,8 +8,6 @@ mod parser_gen;
 mod parser_tests;
 mod ast_parsing_tests;
 mod parse;
-mod token;
-mod manual_parser;
 
 pub use ast::*;
 
