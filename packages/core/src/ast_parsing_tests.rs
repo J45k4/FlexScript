@@ -135,11 +135,7 @@ mod tests {
             body: vec![
                 Item::Assign(
                     Assign {
-                        target: Box::new(
-                            Expr::Ident(
-                                "a".to_string()
-                            )
-                        ),
+                        target: "a".to_string(),
                         value: Box::new(
                             Expr::Const(
                                 Const::Int(5)
@@ -620,25 +616,25 @@ mod tests {
 
         let expected = Ast {
             body: vec![
-                Item::Expr(
-                    Expr::Assign(
-                        Assign {
-                            target: Box::new(Expr::PropAccess(
-                                PropAccess {
-                                    expr: Box::new(
-                                        Expr::Ident(
-                                            "person".to_string()
-                                        )
-                                    ),
-                                    prop: Box::new(Expr::Ident("name".to_string()))
-                                }
-                            )),
-                            value: Box::new(Expr::Const(
-                                Const::String("John".to_string())
-                            ))
-                        }
-                    )
-                )
+                // Item::Expr(
+                //     Expr::Assign(
+                //         Assign {
+                //             target: Box::new(Expr::PropAccess(
+                //                 PropAccess {
+                //                     expr: Box::new(
+                //                         Expr::Ident(
+                //                             "person".to_string()
+                //                         )
+                //                     ),
+                //                     prop: Box::new(Expr::Ident("name".to_string()))
+                //                 }
+                //             )),
+                //             value: Box::new(Expr::Const(
+                //                 Const::String("John".to_string())
+                //             ))
+                //         }
+                //     )
+                // )
             ]
         };
 

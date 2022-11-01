@@ -1,7 +1,10 @@
 
 pub enum ByteCode {
     Load,
+    LoadConst,
     Store,
+    StoreName,
+    BinOP,
     BinMul,
     BinAdd,
     BinMinus,
@@ -9,11 +12,17 @@ pub enum ByteCode {
     Jump,
     JumpIfFalse,
     Call,
-    CmpEq,
+    Cmp,
     BeginScope,
     EndScope,
+    MakeFunction,
+    MakeStruct,
+    MakeArray,
+    Obj,
+    Assign
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
     Float(f64),
@@ -50,11 +59,16 @@ pub enum SideEffect {
     }
 }
 
-pub const SMALLER_THAN_OP: u32 = 0;
-pub const GREATER_THAN_OP: u32 = 1;
-pub const EQUAL_TO_OP: u32 = 2;
-pub const NOT_EQUAL_TO_OP: u32 = 3;
-pub const GREATER_THAN_EQUAL_TO_OP: u32 = 4;
-pub const SMALLER_THAN_EQUAL_TO_OP: u32 = 5;
-pub const LOGICAL_AND: u32 = 6;
-pub const LOGICAL_OR: u32 = 7;
+pub const SMALLER_THAN_OP: usize = 0;
+pub const GREATER_THAN_OP: usize = 1;
+pub const EQUAL_TO_OP: usize = 2;
+pub const NOT_EQUAL_TO_OP: usize = 3;
+pub const GREATER_THAN_EQUAL_TO_OP: usize = 4;
+pub const SMALLER_THAN_EQUAL_TO_OP: usize = 5;
+pub const LOGICAL_AND: usize = 6;
+pub const LOGICAL_OR: usize = 7;
+pub const ADD_OP: usize = 8;
+pub const SUB_OP: usize = 9;
+pub const MUL_OP: usize = 10;
+pub const DIV_OP: usize = 11;
+pub const MOD_OP: usize = 12;

@@ -1,8 +1,10 @@
-use crate::types::ByteCode;
-use crate::types::File;
-use crate::types::Ins;
-use crate::types::SideEffect;
-use crate::types::Value;
+use std::collections::HashMap;
+
+use crate::vm_types::ByteCode;
+use crate::vm_types::File;
+use crate::vm_types::Ins;
+use crate::vm_types::SideEffect;
+use crate::vm_types::Value;
 
 
 pub struct Vm {
@@ -13,6 +15,7 @@ pub struct Vm {
     stack_mem: Vec<Value>,
     files: Vec<File>,
     scopes: Vec<usize>,
+    constants: Vec<Value>,
 }
 
 impl Vm {
@@ -21,7 +24,7 @@ impl Vm {
 
         let len = instructions.len();
 
-        let side_effects = Vec::new();
+        let mut side_effects = Vec::new();
 
         while self.pc < len {
             let pc = self.pc;
@@ -31,14 +34,16 @@ impl Vm {
 
             match ins.code {
                 ByteCode::Load => {
-                    let v = self.stack_mem[self.stack_mem.len() - ins.arg];
+                    let v = &self.stack_mem[self.stack_mem.len() - ins.arg];
 
-                    self.stack.push(v);
+                    self.stack.push(v.clone());
                 },
                 ByteCode::Store => {
                     let v = self.stack.pop().unwrap();
 
-                    self.stack_mem[self.stack_mem.len() - ins.arg] = v;
+                    let l = self.stack_mem.len();
+
+                    self.stack_mem[l - ins.arg] = v;
                 },
                 ByteCode::BinMul |
                 ByteCode::BinAdd |
@@ -130,7 +135,7 @@ impl Vm {
                         _ => panic!("Invalid call")
                     }
                 },
-                ByteCode::CmpEq => {
+                ByteCode::Cmp => {
                     let tos = self.stack.pop().unwrap();
                     let tos1 = self.stack.pop().unwrap();
                     
@@ -153,6 +158,15 @@ impl Vm {
                     let scope_start = self.scopes.pop().unwrap();
                     self.stack_mem.truncate(scope_start);
                 },
+                ByteCode::LoadConst => todo!(),
+                ByteCode::StoreName => todo!(),
+                ByteCode::BinOP => todo!(),
+                ByteCode::MakeFunction => todo!(),
+                ByteCode::MakeStruct => todo!(),
+                ByteCode::MakeArray => todo!(),
+                ByteCode::Obj => todo!(),
+                ByteCode::Assign => todo!(),
+                
             };
 
             if side_effects.len() > 0 {
@@ -161,6 +175,18 @@ impl Vm {
         }
 
         side_effects
+    }
+
+    pub fn store_const(&mut self, v: Value) -> usize {
+        self.constants.push(v);
+
+        self.constants.len() - 1
+    }
+
+    pub fn store_name(&mut self, name: String) -> usize {
+        self.stack_mem.push(Value::None);
+
+        self.stack_mem.len() - 1
     }
 
     pub fn push(&mut self, v: Value) {

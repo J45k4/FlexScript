@@ -1,9 +1,9 @@
 use std::{any, vec};
 
 use anyhow::{Ok, bail};
-use pest::iterators::{Pair, Pairs};
+use pest::{iterators::{Pair, Pairs}, Parser};
 
-use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, Func, Item, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType, MatchCase, MatchExpr, Body, Param, RangeExpr, ForExpr, Call, PropAccess, Array, Xml, XmlChild, Export, Return};
+use crate::{parser_gen::Rule, Stmts, Stmt, Expr, Term, Factor, ExprRightSide, ExprOperator, ExprTerminalOperator, ExprTerminal, TermOperator, TermRightSide, Struct, TypeStmt, EnumStmt, Func, Item, Operator, BinOP, Const, Assign, If, IfBranch, ObjExpr, ObjField, ConstStmt, TypeField, VarType, NonNullType, MatchCase, MatchExpr, Body, Param, RangeExpr, ForExpr, Call, PropAccess, Array, Xml, XmlChild, Export, Return, FlexscriptParser, Ast};
 
 fn parse_break_stmt(pair: Pair<Rule>) -> anyhow::Result<Stmt> {
 
@@ -391,7 +391,7 @@ fn parse_assign(pair: Pair<Rule>) -> anyhow::Result<Assign> {
     let value = parse_expr(next)?;
 
     let a = Assign { 
-        target: Box::new(target), 
+        target: Box::new(target),
         value: Box::new(value)
     };
 
@@ -1417,4 +1417,34 @@ pub fn parse_stmts(pair: Pair<Rule>) -> anyhow::Result<Vec<Item>> {
     }
 
     Ok(items)
+}
+
+pub fn parse_raw_ast(input: &str) -> anyhow::Result<Pairs<Rule>> {
+    let pairs = FlexscriptParser::parse(Rule::file, input)?;
+
+    Ok(pairs)
+}
+
+pub fn parse_file(input: &str) -> anyhow::Result<Ast> {
+    let mut file = Ast {
+        body: vec![]
+    };
+
+    let pairs = FlexscriptParser::parse(Rule::file, input)?;
+
+    for pair in pairs {
+        match pair.as_rule() {
+            Rule::file => {
+                let mut inner = pair.into_inner();
+                let next = inner.next().unwrap();
+
+                let stmt = parse_stmts(next)?;
+                file.body.extend(stmt);
+            }
+            Rule::EOI => {}
+            _ => {}
+        }
+    }
+
+    Ok(file)
 }

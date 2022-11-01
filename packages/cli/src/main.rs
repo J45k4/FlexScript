@@ -1,6 +1,6 @@
 use args::Args;
 use clap::Parser;
-use flexscript_parser::{parse_raw_ast, parse_file};
+use flexscript::{parse_raw_ast, parse_file};
 
 mod args;
 

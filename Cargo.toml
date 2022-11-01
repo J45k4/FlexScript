@@ -2,7 +2,6 @@
 
 members = [
     "./packages/cli",
-    "./packages/parser",
-    "./packages/codegen",
-    "./packages/vm"
+    "./packages/core",
+    "./packages/codegen"
 ]

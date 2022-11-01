@@ -1,4 +1,4 @@
-use crate::parse_raw_ast;
+use crate::parser::parse_raw_ast;
 
 #[cfg(test)]
 mod assingment_tests {

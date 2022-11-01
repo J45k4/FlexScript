@@ -1,5 +1,5 @@
 [package]
-name = "flexscript"
+name = "flexscript-cli"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.2", features = ["derive"] }
-flexscript_parser = { path = "../parser" }
+flexscript = { path = "../core" }
