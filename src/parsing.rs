@@ -158,6 +158,7 @@ impl Parser {
 		let next = self.eat().unwrap();
 
 		if next != token {
+			println!("{}", self.curr_loc());
 			panic!("Expected {:?} but got {:?}", token, next);
 		}
 	}
