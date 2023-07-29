@@ -53,7 +53,7 @@ enum Token {
 	Assign,
 	#[regex(r#""[^"]*""#, |t| t.slice()[1..t.slice().len()-1].to_string())]
 	String(String),
-	#[regex(r"-?[0-9]+", |t| t.slice().parse::<i64>().ok())]
+	#[regex(r"-?[0-9]+", |t| t.slice().parse::<i64>().ok(), priority = 2)]
 	Int(i64),
 	#[regex(r"-?[0-9]*\.[0-9]+", |t| t.slice().parse::<f64>().ok())]
 	Float(f64),
@@ -75,7 +75,7 @@ enum Token {
 	Multiply,
 	#[token("/")]
 	Divide,
-	#[regex(r"[A-Za-z_]+", |t| t.slice().to_string())]
+	#[regex(r"[A-Za-z_0-9]+", |t| t.slice().to_string())]
 	Ident(String),
 }
 
@@ -1501,6 +1501,34 @@ mod tests {
 						Property {
 							name: "color".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Str("black".to_string()))),
+						},
+					],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	pub fn test_ident_with_number() {
+		let code = r#"
+			H1 {
+				text: "Todo"
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::StructIns(
+				StructIns {
+					name: "H1".to_string(),
+					probs: vec![
+						Property {
+							name: "text".to_string(),
+							value: Box::new(ASTNode::Lit(Value::Str("Todo".to_string()))),
 						},
 					],
 				}
