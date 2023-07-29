@@ -180,7 +180,10 @@ impl Parser {
 
 		match token {
 			Token::Ident(ident) => ident,
-			_ => panic!("Expected ident but got {:?}", token),
+			_ => {
+				println!("{}", self.curr_loc());
+				panic!("Expected ident but got {:?}", token)
+			},
 		}
 	}
 
