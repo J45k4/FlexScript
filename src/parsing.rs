@@ -25,8 +25,8 @@ enum Token {
 	Whitespace,
 	#[token("for")]
 	For,
-	#[token("type")]
-	Type,
+	// #[token("type")]
+	// Type,
 	#[token("=>")]
 	Arrow,
 	#[token("{")]
@@ -1533,6 +1533,36 @@ mod tests {
 						Property {
 							name: "text".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Str("Todo".to_string()))),
+						},
+					],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_type_works_as_filename() {
+		// Maybe in the future there will be type keyword
+		let code = r#"
+			Input {
+				type: "text"
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.set_loglevel(1)
+			.parse();
+
+		let expected = vec![
+			ASTNode::StructIns(
+				StructIns {
+					name: "Input".to_string(),
+					probs: vec![
+						Property {
+							name: "type".to_string(),
+							value: Box::new(ASTNode::Lit(Value::Str("text".to_string()))),
 						},
 					],
 				}
