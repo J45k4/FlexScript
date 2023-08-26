@@ -2,6 +2,9 @@ use std::ops::Range;
 use logos::Logos;
 use logos::skip;
 
+use crate::For;
+use crate::ForCond;
+use crate::If;
 use crate::types::ASTNode;
 use crate::types::Array;
 use crate::types::Assign;
@@ -25,6 +28,12 @@ enum Token {
 	Whitespace,
 	#[token("for")]
 	For,
+	#[token("in")]
+	In,
+	#[token("if")]
+	If,
+	#[token("else")]
+	Else,
 	// #[token("type")]
 	// Type,
 	#[token("=>")]
@@ -49,6 +58,8 @@ enum Token {
 	Comma,
 	#[token(".")]
 	Dot,
+	#[token("==")]
+	Eq,
 	#[token("=")]
 	Assign,
 	#[regex(r#""[^"]*""#, |t| t.slice()[1..t.slice().len()-1].to_string())]
@@ -345,6 +356,12 @@ impl Parser {
 					value: Box::new(self.parse_item()),
 				}))
 			}
+			Token::If => {
+				Some(self.parse_if())
+			}
+			Token::For => {
+				Some(self.parse_for())
+			}
 			_ => Some(self.parse_expr())
 		};
 
@@ -353,6 +370,126 @@ impl Parser {
 		}
 
 		ret
+	}
+
+	fn parse_for(&mut self) -> ASTNode {
+		self.skip(1);
+
+		match self.peek(0) {
+			Some(Token::Ident(idt)) => {
+				self.skip(1);
+				match self.peek(0) {
+					Some(Token::In) => {
+						self.skip(1);
+						let it = self.parse_expr();
+						self.expect_eat(Token::OpenBrace);
+
+						let mut body = Vec::new();
+
+						while let Some(token) = self.peek(0) {
+							match token {
+								Token::CloseBrace => {
+									self.skip(1);
+									break;
+								},
+								_ => body.push(self.parse_item().unwrap()),
+							}
+						}
+
+						ASTNode::For(
+							For {
+								cond: ForCond::FromIt {
+									ident: idt.to_string(),
+									it: Box::new(it),
+								},
+								body: body,
+							}
+						)
+					},
+					_ => {
+						println!("{}", self.curr_loc());
+						panic!("Expected in but got {:?}", self.peek(0));
+					}
+				}
+			},
+			Some(Token::OpenBrace) => {
+				self.skip(1);
+				let mut body = Vec::new();
+
+				while let Some(token) = self.peek(0) {
+					match token {
+						Token::CloseBrace => {
+							self.skip(1);
+							break;
+						},
+						_ => body.push(self.parse_item().unwrap()),
+					}
+				}
+
+				ASTNode::For(
+					For {
+						cond: ForCond::None,
+						body: body,
+					}
+				)
+			},
+			_ => {
+				println!("{}", self.curr_loc());
+				panic!("Expected open brace got {:?}", self.peek(0));
+			}
+		}
+	}
+
+	fn parse_if(&mut self) -> ASTNode {
+		self.skip(1);
+		let cond = self.parse_expr();
+		self.expect_eat(Token::OpenBrace);
+
+		let mut body = Vec::new();
+
+		while let Some(token) = self.peek(0) {
+			match token {
+				Token::CloseBrace => {
+					self.skip(1);
+					break;
+				},
+				_ => body.push(self.parse_item().unwrap()),
+			}
+		}
+
+		if let Some(Token::Else) = self.peek(0) {
+			self.skip(1);
+
+			match self.peek(0) {
+				Some(Token::If) => {
+					body.push(self.parse_if());
+				},
+				Some(Token::OpenBrace) => {
+					self.skip(1);
+					while let Some(token) = self.peek(0) {
+						match token {
+							Token::CloseBrace => {
+								self.skip(1);
+								break;
+							},
+							_ => body.push(self.parse_item().unwrap()),
+						}
+					}
+				},
+				_ => {
+					println!("{}", self.curr_loc());
+					panic!("Expected if or open brace got {:?}", self.peek(0));
+				}
+			}
+		}
+
+		ASTNode::If(
+			If {
+				cond: Box::new(cond),
+				body: body,
+				els: None,
+			}
+		)
 	}
 
 	fn parse_fun(&mut self) -> ASTNode {
@@ -532,6 +669,16 @@ impl Parser {
 			},
 			Token::Dot => {
 				self.parse_prob_access(left)
+			},
+			Token::Eq => {
+				self.skip(1);
+				ASTNode::BinOp(
+					BinOp { 
+						left: Box::new(left), 
+						op: Op::Equal,
+						right: Box::new(self.parse_expr()) 
+					}
+				)
 			},
 			_ => {
 				left
@@ -731,6 +878,10 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
+    use crate::For;
+    use crate::ForCond;
+    use crate::If;
+
     use super::*;
 
 	#[test]
@@ -1565,6 +1716,143 @@ mod tests {
 							value: Box::new(ASTNode::Lit(Value::Str("text".to_string()))),
 						},
 					],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_equal_op() {
+		let code = r#"
+			5 == 2
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::BinOp(
+				BinOp {
+					op: Op::Equal,
+					left: Box::new(ASTNode::Lit(Value::Int(5))),
+					right: Box::new(ASTNode::Lit(Value::Int(2))),
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_if_parsing() {
+		let code = r#"
+			if a == 5 {
+
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::If(
+				If {
+					cond: Box::new(
+						ASTNode::BinOp(
+							BinOp {
+								op: Op::Equal,
+								left: Box::new(ASTNode::Ident("a".to_string())),
+								right: Box::new(ASTNode::Lit(Value::Int(5))),
+							}
+						)
+					),
+					body: vec![],
+					els: None
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_if_else_parsing() {
+		let code = r#"
+			if a == 5 {
+
+			} else {
+
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::If(
+				If {
+					cond: Box::new(
+						ASTNode::BinOp(
+							BinOp {
+								op: Op::Equal,
+								left: Box::new(ASTNode::Ident("a".to_string())),
+								right: Box::new(ASTNode::Lit(Value::Int(5))),
+							}
+						)
+					),
+					body: vec![],
+					els: None
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_empty_for() {
+		let code = r#"
+			for {
+
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::For(
+				For {
+					cond: ForCond::None,
+					body: vec![],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn test_for_from_it() {
+		let code = r#"
+			for i in iterator {
+
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::For(
+				For {
+					cond: ForCond::FromIt {
+						ident: "i".to_string(),
+						it: Box::new(ASTNode::Ident("iterator".to_string())),
+					},
+					body: vec![],
 				}
 			)
 		];

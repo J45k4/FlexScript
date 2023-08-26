@@ -101,6 +101,7 @@ pub enum Op {
 	Minus,
 	Multiply,
 	Divide,
+	Equal,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -113,6 +114,28 @@ pub struct BinOp {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Ret {
 	pub value: Box<Option<ASTNode>>
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct If {
+	pub cond: Box<ASTNode>,
+	pub body: Vec<ASTNode>,
+	pub els: Option<Vec<ASTNode>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ForCond {
+	None,
+	FromIt {
+		ident: String,
+		it: Box<ASTNode>,
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct For {
+	pub cond: ForCond,
+	pub body: Vec<ASTNode>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -133,5 +156,7 @@ pub enum ASTNode {
 	ProbAccess(ProbAccess),
 	Obj(Obj),
 	Ret(Ret),
-	BinOp(BinOp)
+	BinOp(BinOp),
+	If(If),
+	For(For),
 }
