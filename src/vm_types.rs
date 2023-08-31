@@ -1,7 +1,9 @@
+use crate::Value;
+
 
 pub enum ByteCode {
     Load,
-    LoadConst,
+    LoadConst(usize),
     Store,
     StoreName,
     BinOP,
@@ -19,19 +21,20 @@ pub enum ByteCode {
     MakeStruct,
     MakeArray,
     Obj,
-    Assign
+    Assign,
+    Ret(usize)
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Bool(bool),
-    None,
-    ExtRef(usize),
-    Ref(usize),
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum Value {
+//     Int(i64),
+//     Float(f64),
+//     String(String),
+//     Bool(bool),
+//     None,
+//     ExtRef(usize),
+//     Ref(usize),
+// }
 
 pub struct Ins {
     pub code: ByteCode,
@@ -52,10 +55,14 @@ pub struct ScopeItem {
     pub value: Value
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum SideEffect {
     Call {
         r: usize,
         args: Vec<Value>
+    },
+    Return {
+        value: Value
     }
 }
 
