@@ -675,7 +675,7 @@ impl Parser {
 				ASTNode::BinOp(
 					BinOp { 
 						left: Box::new(left), 
-						op: Op::Equal,
+						op: Op::Eq,
 						right: Box::new(self.parse_expr()) 
 					}
 				)
@@ -803,7 +803,7 @@ impl Parser {
 				ASTNode::BinOp(
 					BinOp { 
 						left: Box::new(left), 
-						op: Op::Multiply,
+						op: Op::Mul,
 						right: Box::new(self.parse_factor()) 
 					}
 				)
@@ -816,7 +816,7 @@ impl Parser {
 				ASTNode::BinOp(
 					BinOp { 
 						left: Box::new(left), 
-						op: Op::Divide,
+						op: Op::Div,
 						right: Box::new(self.parse_factor()) 
 					}
 				)
@@ -959,7 +959,7 @@ mod tests {
 						ASTNode::BinOp(
 							BinOp {
 								left: Box::new(ASTNode::Lit(Value::Int(1))),
-								op: Op::Multiply,
+								op: Op::Mul,
 								right: Box::new(ASTNode::Lit(Value::Int(2))),
 							}
 						)
@@ -988,7 +988,7 @@ mod tests {
 						ASTNode::BinOp(
 							BinOp {
 								left: Box::new(ASTNode::Lit(Value::Int(1))),
-								op: Op::Divide,
+								op: Op::Div,
 								right: Box::new(ASTNode::Lit(Value::Int(2))),
 							}
 						)
@@ -1025,7 +1025,7 @@ mod tests {
 										}
 									)
 								),
-								op: Op::Multiply,
+								op: Op::Mul,
 								right: Box::new(ASTNode::Lit(Value::Int(3))),
 							}
 						)
@@ -1059,7 +1059,7 @@ mod tests {
 									ASTNode::BinOp(
 										BinOp {
 											left: Box::new(ASTNode::Lit(Value::Int(2))),
-											op: Op::Multiply,
+											op: Op::Mul,
 											right: Box::new(ASTNode::Lit(Value::Int(3))),
 										}
 									)
@@ -1735,7 +1735,7 @@ mod tests {
 		let expected = vec![
 			ASTNode::BinOp(
 				BinOp {
-					op: Op::Equal,
+					op: Op::Eq,
 					left: Box::new(ASTNode::Lit(Value::Int(5))),
 					right: Box::new(ASTNode::Lit(Value::Int(2))),
 				}
@@ -1762,7 +1762,7 @@ mod tests {
 					cond: Box::new(
 						ASTNode::BinOp(
 							BinOp {
-								op: Op::Equal,
+								op: Op::Eq,
 								left: Box::new(ASTNode::Ident("a".to_string())),
 								right: Box::new(ASTNode::Lit(Value::Int(5))),
 							}
@@ -1796,7 +1796,7 @@ mod tests {
 					cond: Box::new(
 						ASTNode::BinOp(
 							BinOp {
-								op: Op::Equal,
+								op: Op::Eq,
 								left: Box::new(ASTNode::Ident("a".to_string())),
 								right: Box::new(ASTNode::Lit(Value::Int(5))),
 							}

@@ -2,9 +2,9 @@ use crate::Value;
 
 
 pub enum ByteCode {
-    Load,
+    Load(usize),
     LoadConst(usize),
-    Store,
+    Store(usize),
     StoreName,
     BinOP,
     BinMul,
@@ -12,7 +12,7 @@ pub enum ByteCode {
     BinMinus,
     BinDivide,
     Jump,
-    JumpIfFalse,
+    JumpIfFalse(usize),
     Call,
     Cmp,
     BeginScope,
@@ -22,7 +22,8 @@ pub enum ByteCode {
     MakeArray,
     Obj,
     Assign,
-    Ret(usize)
+    Ret(usize),
+    Var(usize)
 }
 
 // #[derive(Debug, Clone, PartialEq)]

@@ -5,6 +5,7 @@ pub enum Value {
     Str(String),
     Bool(bool),
     Array(Vec<Value>),
+	Ptr(usize),
     None,
 }
 
@@ -99,9 +100,9 @@ pub struct ProbAccess {
 pub enum Op {
 	Plus,
 	Minus,
-	Multiply,
-	Divide,
-	Equal,
+	Mul,
+	Div,
+	Eq,
 }
 
 #[derive(Debug, PartialEq, Clone)]
