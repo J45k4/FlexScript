@@ -1,3 +1,4 @@
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
@@ -7,6 +8,10 @@ pub enum Value {
     Array(Vec<Value>),
 	Ptr(usize),
 	Fn(usize),
+	ArrayIter {
+		inx: usize,
+		arr: Vec<Value>
+	},
     None,
 }
 

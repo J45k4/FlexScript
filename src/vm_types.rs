@@ -25,7 +25,8 @@ pub enum ByteCode {
     Assign,
     Ret(usize),
     Var(usize),
-    Next
+    Next,
+    MakeIter
 }
 
 // #[derive(Debug, Clone, PartialEq)]

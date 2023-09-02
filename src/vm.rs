@@ -189,9 +189,10 @@ impl Vm {
                 match &f.cond {
                     ForCond::FromIt { ident, it } => {
                         self.compile_node(block, it);
+                        block.push(ByteCode::MakeIter);
                         block.push(ByteCode::Next);
                         start_pc = block.len() - 1;
-                        let i = self.store_idt(ident.clone());
+                        let i: usize = self.store_idt(ident.clone());
                         block.push(ByteCode::Store(i));
                         block.push(ByteCode::Load(i));
                         block.push(ByteCode::JumpIfFalse(0));
@@ -235,7 +236,11 @@ impl Vm {
                     print!("pc: {}, code: {:?}", pc, c);
 
                     match c {
-                        ByteCode::Load(i) => print!(" {}", self.id_idt_map.get(&i).unwrap()),
+                        ByteCode::Load(i) => {
+                            let name = self.id_idt_map.get(&i).unwrap();
+                            let v = self.scope.get(i).unwrap();
+                            print!(" {} {:?}", name, v);
+                        },
                         ByteCode::Store(i) => {
                             let name = self.id_idt_map.get(&i).unwrap();
                             let v = self.stack.last().unwrap();
@@ -270,7 +275,7 @@ impl Vm {
                         let tos = self.stack.pop().unwrap();
                         let tos1 = self.stack.pop().unwrap();
 
-                        let v = match (tos, tos1) {
+                        let v: Value = match (tos1,tos) {
                             (Value::Int(a), Value::Int(b)) => {
                                 match c {
                                     ByteCode::BinMul => Value::Int(a * b),
@@ -310,7 +315,7 @@ impl Vm {
                             _ => panic!("Invalid operation")
                         };
 
-                        self.stack.push(v);
+                        self.push_stack(v);
                     },
                     ByteCode::Jump(indx) => {
                         current.pc = *indx;
@@ -413,12 +418,36 @@ impl Vm {
                     ByteCode::Next => {
                         let val = self.stack.last_mut().unwrap();
 
+                        let v = match val {
+                            Value::ArrayIter {
+                                inx,
+                                arr
+                            } => {
+                                match arr.get(*inx) {
+                                    Some(v) => {
+                                        *inx += 1;
+                                        v.clone()
+                                    },
+                                    None => {
+                                        self.stack.pop();
+                                        Value::None
+                                    }
+                                }
+                            },
+                            _ => todo!("{:?}", val)
+                        };
+
+                        self.stack.push(v);
+                    },
+                    ByteCode::MakeIter => {
+                        let val: Value = self.stack.pop().unwrap();
+
                         match val {
                             Value::Array(arr) => {
-                                match arr.pop() {
-                                    Some(v) => self.stack.push(v),
-                                    None => self.stack.push(Value::None)
-                                }
+                                self.stack.push(Value::ArrayIter {
+                                    inx: 0,
+                                    arr: arr
+                                });
                             },
                             _ => todo!("{:?}", val)
                         }
@@ -436,6 +465,14 @@ impl Vm {
         }
 
         Value::None
+    }
+
+    pub fn push_stack(&mut self, v: Value) {
+        if self.log > 0 {
+            println!("push stack: {:?}", v);
+        }
+
+        self.stack.push(v);
     }
 
     pub fn store_const(&mut self, v: Value) -> usize {
@@ -495,7 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_expr() {
+    fn simple_plus() {
         let mut vm = Vm::new();
         let ret = ASTNode::Ret(
             Ret {
@@ -513,6 +550,54 @@ mod tests {
         let block = vm.add_file(&vec![ret]);
         let val = vm.run(block, vec![]);
         assert_eq!(val, Value::Int(2));
+    }
+
+    #[test]
+    fn simple_sub() {
+        let mut vm = Vm::new();
+        let ret = ASTNode::Ret(
+            Ret {
+                value: Box::new(Some(
+                    ASTNode::BinOp(
+                        BinOp {
+                            left: Box::new(ASTNode::Lit(Value::Int(1))),
+                            op: Op::Minus,
+                            right: Box::new(ASTNode::Lit(Value::Int(1)))
+                        }
+                    )
+                ))
+            }
+        );
+        let block = vm.add_file(&vec![ret]);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(0));
+    }
+
+    #[test]
+    fn add_sub() {
+        let mut vm = Vm::new();
+        let ret = ASTNode::Ret(
+            Ret {
+                value: Box::new(Some(
+                    ASTNode::BinOp(
+                        BinOp {
+                            left: Box::new(ASTNode::BinOp(
+                                BinOp {
+                                    left: Box::new(ASTNode::Lit(Value::Int(1))),
+                                    op: Op::Plus,
+                                    right: Box::new(ASTNode::Lit(Value::Int(1)))
+                                }
+                            )),
+                            op: Op::Minus,
+                            right: Box::new(ASTNode::Lit(Value::Int(1)))
+                        }
+                    )
+                ))
+            }
+        );
+        let block = vm.add_file(&vec![ret]);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(1));
     }
 
     #[test]
@@ -695,7 +780,7 @@ mod tests {
                 right: Box::new(ASTNode::BinOp(
                     BinOp {
                         left: Box::new(ASTNode::Ident("state".to_string())),
-                        op: Op::Plus,
+                        op: Op::Minus,
                         right: Box::new(ASTNode::Ident("a".to_string()))
                     }
                 ))
@@ -728,6 +813,6 @@ mod tests {
         );
         let block = vm.add_file(&vec![var, forr, ret]);
         let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(6));
+        assert_eq!(val, Value::Int(-6));
     }
 }
