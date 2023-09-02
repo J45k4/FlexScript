@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::ASTNode;
+use crate::ForCond;
 use crate::Op;
 use crate::Value;
 use crate::vm_types::ByteCode;
@@ -182,6 +183,30 @@ impl Vm {
                 self.compile_node(block, &c.callee);
                 block.push(ByteCode::Call(c.args.len()));
             },
+            ASTNode::For(f) => {
+                let mut start_pc = 0;
+                let mut false_jump_pc = 0;
+                match &f.cond {
+                    ForCond::FromIt { ident, it } => {
+                        self.compile_node(block, it);
+                        block.push(ByteCode::Next);
+                        start_pc = block.len() - 1;
+                        let i = self.store_idt(ident.clone());
+                        block.push(ByteCode::Store(i));
+                        block.push(ByteCode::Load(i));
+                        block.push(ByteCode::JumpIfFalse(0));
+                        false_jump_pc = block.len() - 1;
+                    },
+                    _ => todo!()
+                }
+
+                for node in &f.body {
+                    self.compile_node(block, node);
+                }
+
+                block.push(ByteCode::Jump(start_pc));
+                block[false_jump_pc] = ByteCode::JumpIfFalse(block.len());
+            },
             _ => todo!("{:?}", node)
         }
     }
@@ -211,7 +236,15 @@ impl Vm {
 
                     match c {
                         ByteCode::Load(i) => print!(" {}", self.id_idt_map.get(&i).unwrap()),
-                        ByteCode::Store(i) => print!(" {}", self.id_idt_map.get(&i).unwrap()),
+                        ByteCode::Store(i) => {
+                            let name = self.id_idt_map.get(&i).unwrap();
+                            let v = self.stack.last().unwrap();
+                            print!(" {} {:?}", name, v)
+                        },
+                        ByteCode::JumpIfFalse(_) => print!(" {:?}", self.stack.last()),
+                        ByteCode::Next => print!(" {:?}", self.stack.last()),
+                        ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i].clone()),
+                        ByteCode::Ret(_) => print!(" {:?}", self.stack.last()),
                         _ => {}
                     }
 
@@ -279,10 +312,8 @@ impl Vm {
 
                         self.stack.push(v);
                     },
-                    ByteCode::Jump => {
-                        // self.pc = ins.arg;
-
-                        // log::debug!("jumping to {}", self.pc);
+                    ByteCode::Jump(indx) => {
+                        current.pc = *indx;
                     },
                     ByteCode::JumpIfFalse(inx) => {
                         let v = self.stack.pop().unwrap();
@@ -293,7 +324,15 @@ impl Vm {
                                     current.pc = *inx;
                                 }
                             },
-                            _ => panic!("Invalid operation")
+                            Value::None => {
+                                current.pc = *inx;
+                            },
+                            Value::Int(i) => {
+                                if i < 1 {
+                                    current.pc = *inx;
+                                } 
+                            },
+                            _ => panic!("{:?}", v)
                         }
                     },
                     ByteCode::Call(arg_count) => {
@@ -302,7 +341,7 @@ impl Vm {
                         for _ in 0..*arg_count {
                             let v = self.stack.pop().unwrap();
                             args.push(v);
-                        }
+                        }   
 
                         args.reverse();
 
@@ -371,6 +410,19 @@ impl Vm {
                     ByteCode::Fun(i) => {
                         self.stack.push(Value::Fn(*i));
                     },
+                    ByteCode::Next => {
+                        let val = self.stack.last_mut().unwrap();
+
+                        match val {
+                            Value::Array(arr) => {
+                                match arr.pop() {
+                                    Some(v) => self.stack.push(v),
+                                    None => self.stack.push(Value::None)
+                                }
+                            },
+                            _ => todo!("{:?}", val)
+                        }
+                    },
                     _ => todo!("{:?}", c)
                 };
             }
@@ -420,6 +472,8 @@ mod tests {
     use crate::Assign;
     use crate::BinOp;
     use crate::Call;
+    use crate::For;
+    use crate::ForCond;
     use crate::Fun;
     use crate::Op;
     use crate::Ret;
@@ -623,5 +677,57 @@ mod tests {
         let block = vm.add_file(&vec![fun, ret]);
         let val = vm.run(block, vec![]);
         assert_eq!(val, Value::Int(1));
+    }
+
+    #[test]
+    fn simple_for() {
+        let mut vm = Vm::new();
+        let var = ASTNode::Assign(
+            Assign {
+                left: Box::new(ASTNode::Ident("state".to_string())),
+                right: Box::new(ASTNode::Lit(Value::Int(0)))
+            }
+        );
+
+        let increment_expr = ASTNode::Assign(
+            Assign { 
+                left: Box::new(ASTNode::Ident("state".to_string())),
+                right: Box::new(ASTNode::BinOp(
+                    BinOp {
+                        left: Box::new(ASTNode::Ident("state".to_string())),
+                        op: Op::Plus,
+                        right: Box::new(ASTNode::Ident("a".to_string()))
+                    }
+                ))
+            }
+        );
+        let forr = ASTNode::For(
+            For {
+                cond: ForCond::FromIt {
+                    ident: "a".to_string(),
+                    it: Box::new(ASTNode::Array(
+                        Array {
+                            items: vec![
+                                ASTNode::Lit(Value::Int(1)),
+                                ASTNode::Lit(Value::Int(2)),
+                                ASTNode::Lit(Value::Int(3)),
+                            ]
+                        }
+                    ))
+                },
+                body: vec![
+                    increment_expr
+                ]
+            }
+        );
+
+        let ret = ASTNode::Ret(
+            Ret {
+                value: Box::new(Some(ASTNode::Ident("state".to_string())))
+            }
+        );
+        let block = vm.add_file(&vec![var, forr, ret]);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(6));
     }
 }

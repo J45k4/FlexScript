@@ -34,12 +34,6 @@ pub struct Obj {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct ForLoop {
-	pub iterator: Box<ASTNode>,
-	pub body: Box<ASTNode>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub struct Array {
 	pub items: Vec<ASTNode>,
 }
@@ -145,7 +139,6 @@ pub enum ASTNode {
 	Ident(String),
 	Assign(Assign),
 	StructIns(StructIns),
-	ForLoop(ForLoop),
 	Array(Array),
 	Call(Call),
 	Property(String, Box<ASTNode>),

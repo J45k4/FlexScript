@@ -12,7 +12,7 @@ pub enum ByteCode {
     BinAdd,
     BinMinus,
     BinDivide,
-    Jump,
+    Jump(usize),
     JumpIfFalse(usize),
     Call(usize),
     Cmp,
@@ -24,7 +24,8 @@ pub enum ByteCode {
     Obj,
     Assign,
     Ret(usize),
-    Var(usize)
+    Var(usize),
+    Next
 }
 
 // #[derive(Debug, Clone, PartialEq)]
