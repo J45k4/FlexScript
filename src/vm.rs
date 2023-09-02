@@ -47,10 +47,10 @@ impl Scope {
 struct CallItem {
     blk: usize,
     pc: usize,
+    args: Vec<Value>
 }
 
 pub struct Vm {
-    pc: usize,
     stack: Vec<Value>,
     stack_mem: Vec<Value>,
     files: Vec<File>,
@@ -59,14 +59,15 @@ pub struct Vm {
     code_blocks: Vec<Vec<ByteCode>>,
     call_stack: Vec<CallItem>,
     idt_map: HashMap<String, usize>,
+    id_idt_map: HashMap<usize, String>,
     next_idt: usize,
     scope: Scope,
+    pub log: usize
 }
 
 impl Vm {
     pub fn new() -> Self {
         Self {
-            pc: 0,
             stack: Vec::new(),
             stack_mem: Vec::new(),
             files: Vec::new(),
@@ -76,7 +77,9 @@ impl Vm {
             call_stack: Vec::new(),
             scope: Scope::new(),
             idt_map: HashMap::new(),
+            id_idt_map: HashMap::new(),
             next_idt: 0,
+            log: 0
         }
     }
 
@@ -158,178 +161,229 @@ impl Vm {
                 let i = self.store_idt(idt.clone());
                 block.push(ByteCode::Load(i));
             },
+            ASTNode::Array(a) => {
+                for item in &a.items {
+                    self.compile_node(block, item);
+                }
+                block.push(ByteCode::MakeArray(a.items.len()));
+            },
+            ASTNode::Fun(f) => {
+                let mut fun_block = Vec::new();
+                for node in &f.body {
+                    self.compile_node(&mut fun_block, node);
+                }
+                self.code_blocks.push(fun_block);
+                block.push(ByteCode::Fun(self.code_blocks.len() - 1));
+            },
+            ASTNode::Call(c) => {
+                for arg in &c.args {
+                    self.compile_node(block, arg);
+                }
+                self.compile_node(block, &c.callee);
+                block.push(ByteCode::Call(c.args.len()));
+            },
             _ => todo!("{:?}", node)
         }
     }
 
-    pub fn run(&mut self, block_id: usize) -> Vec<SideEffect> {
-        let code_block = &self.code_blocks[block_id];
+    pub fn run(&mut self, blk: usize, args: Vec<Value>) -> Value {
+        if self.log > 0 {
+            println!("run: {} {:?}", blk, args);
+        }
 
+        let mut current = CallItem {
+            args: args,
+            blk,
+            pc: 0
+        };
+        let code_block = &self.code_blocks[blk];
         let len = code_block.len();
 
-        let mut side_effects = Vec::new();
+        loop {
+            while current.pc < len {
+                let pc = current.pc;
+                current.pc += 1;
 
-        while self.pc < len {
-            let pc = self.pc;
-            self.pc += 1;
+                let c = &self.code_blocks[current.blk][pc];
 
-            let c = &code_block[pc];
+                if self.log > 0 {
+                    print!("pc: {}, code: {:?}", pc, c);
 
-            match c {
-                ByteCode::Load(i) => {
-                    let v = match self.scope.get(i){
-                        Some(v) => v.clone(),
-                        None => panic!("variable not found")
-                    };
-                    self.stack.push(v);
-                },
-                ByteCode::Store(i) => {
-                    let v = self.stack.pop().unwrap();
-                    self.scope.insert(*i, v);
-                },
-                ByteCode::BinMul |
-                ByteCode::BinAdd |
-                ByteCode::BinMinus |
-                ByteCode::BinDivide => {
-                    let tos = self.stack.pop().unwrap();
-                    let tos1 = self.stack.pop().unwrap();
-
-                    let v = match (tos, tos1) {
-                        (Value::Int(a), Value::Int(b)) => {
-                            match c {
-                                ByteCode::BinMul => Value::Int(a * b),
-                                ByteCode::BinAdd => Value::Int(a + b),
-                                ByteCode::BinMinus => Value::Int(a - b),
-                                ByteCode::BinDivide => Value::Int(a / b),
-                                _ => panic!("Invalid operation")
-                            }
-                        },
-                        (Value::Float(a), Value::Float(b)) => {
-                            match c {
-                                ByteCode::BinMul => Value::Float(a * b),
-                                ByteCode::BinAdd => Value::Float(a + b),
-                                ByteCode::BinMinus => Value::Float(a - b),
-                                ByteCode::BinDivide => Value::Float(a / b),
-                                _ => panic!("Invalid operation")
-                            }
-                        },
-                        (Value::Float(a), Value::Int(b)) => {
-                            match c {
-                                ByteCode::BinMul => Value::Float(a * b as f64),
-                                ByteCode::BinAdd => Value::Float(a + b as f64),
-                                ByteCode::BinMinus => Value::Float(a - b as f64),
-                                ByteCode::BinDivide => Value::Float(a / b as f64),
-                                _ => panic!("Invalid operation")
-                            }
-                        },
-                        (Value::Int(a), Value::Float(b)) => {
-                            match c {
-                                ByteCode::BinMul => Value::Float(a as f64 * b),
-                                ByteCode::BinAdd => Value::Float(a as f64 + b),
-                                ByteCode::BinMinus => Value::Float(a as f64 - b),
-                                ByteCode::BinDivide => Value::Float(a as f64 / b),
-                                _ => panic!("Invalid operation")
-                            }
-                        },
-                        _ => panic!("Invalid operation")
-                    };
-
-                    self.stack.push(v);
-                },
-                ByteCode::Jump => {
-                    // self.pc = ins.arg;
-
-                    // log::debug!("jumping to {}", self.pc);
-                },
-                ByteCode::JumpIfFalse(inx) => {
-                    let v = self.stack.pop().unwrap();
-
-                    match v {
-                        Value::Bool(b) => {
-                            if !b {
-                                self.pc = *inx;
-                            }
-                        },
-                        _ => panic!("Invalid operation")
+                    match c {
+                        ByteCode::Load(i) => print!(" {}", self.id_idt_map.get(&i).unwrap()),
+                        ByteCode::Store(i) => print!(" {}", self.id_idt_map.get(&i).unwrap()),
+                        _ => {}
                     }
-                },
-                ByteCode::Call => {
-                    // let mut args = vec![];
-    
-                    // for _ in 0..ins.arg {
-                    //     let v = self.stack.pop().unwrap();
-                    //     args.push(v);
-                    // }
 
-                    // let v = self.stack.pop().unwrap();
+                    println!("");
+                }
 
-                    // match v {
-                    //     Value::ExtRef(r) => {
-                    //         let call = SideEffect::Call {
-                    //             r,
-                    //             args
-                    //         };
+                match c {
+                    ByteCode::Load(i) => {
+                        let v = match self.scope.get(i){
+                            Some(v) => v.clone(),
+                            None => panic!("variable not found")
+                        };
+                        self.stack.push(v);
+                    },
+                    ByteCode::Store(i) => {
+                        let v = self.stack.pop().unwrap();
+                        self.scope.insert(*i, v);
+                    },
+                    ByteCode::BinMul |
+                    ByteCode::BinAdd |
+                    ByteCode::BinMinus |
+                    ByteCode::BinDivide => {
+                        let tos = self.stack.pop().unwrap();
+                        let tos1 = self.stack.pop().unwrap();
 
-                    //         side_effects.push(call);
-                    //     },
-                    //     _ => panic!("Invalid call")
-                    // }
-                },
-                ByteCode::Cmp => {
-                    let tos = self.stack.pop().unwrap();
-                    let tos1 = self.stack.pop().unwrap();
-                    
-                    let v = match (tos, tos1) {
-                        (Value::Int(a), Value::Int(b)) => Value::Bool(a == b),
-                        (Value::Float(a), Value::Float(b)) => Value::Bool(a == b),
-                        (Value::Float(a), Value::Int(b)) => Value::Bool(a == b as f64),
-                        (Value::Int(a), Value::Float(b)) => Value::Bool(a as f64 == b),
-                        (Value::Bool(a), Value::Bool(b)) => Value::Bool(a == b),
-                        (Value::Str(a), Value::Str(b)) => Value::Bool(a == b),
-                        _ => panic!("Invalid operation")
-                    };
+                        let v = match (tos, tos1) {
+                            (Value::Int(a), Value::Int(b)) => {
+                                match c {
+                                    ByteCode::BinMul => Value::Int(a * b),
+                                    ByteCode::BinAdd => Value::Int(a + b),
+                                    ByteCode::BinMinus => Value::Int(a - b),
+                                    ByteCode::BinDivide => Value::Int(a / b),
+                                    _ => panic!("Invalid operation")
+                                }
+                            },
+                            (Value::Float(a), Value::Float(b)) => {
+                                match c {
+                                    ByteCode::BinMul => Value::Float(a * b),
+                                    ByteCode::BinAdd => Value::Float(a + b),
+                                    ByteCode::BinMinus => Value::Float(a - b),
+                                    ByteCode::BinDivide => Value::Float(a / b),
+                                    _ => panic!("Invalid operation")
+                                }
+                            },
+                            (Value::Float(a), Value::Int(b)) => {
+                                match c {
+                                    ByteCode::BinMul => Value::Float(a * b as f64),
+                                    ByteCode::BinAdd => Value::Float(a + b as f64),
+                                    ByteCode::BinMinus => Value::Float(a - b as f64),
+                                    ByteCode::BinDivide => Value::Float(a / b as f64),
+                                    _ => panic!("Invalid operation")
+                                }
+                            },
+                            (Value::Int(a), Value::Float(b)) => {
+                                match c {
+                                    ByteCode::BinMul => Value::Float(a as f64 * b),
+                                    ByteCode::BinAdd => Value::Float(a as f64 + b),
+                                    ByteCode::BinMinus => Value::Float(a as f64 - b),
+                                    ByteCode::BinDivide => Value::Float(a as f64 / b),
+                                    _ => panic!("Invalid operation")
+                                }
+                            },
+                            _ => panic!("Invalid operation")
+                        };
 
-                    self.stack.push(v);
-                },
-                ByteCode::BeginScope => {
-                    self.scopes.push(self.stack_mem.len());
-                },
-                ByteCode::EndScope => {
-                    let scope_start = self.scopes.pop().unwrap();
-                    self.stack_mem.truncate(scope_start);
-                },
-                ByteCode::LoadConst(a) => {
-                    let v = self.constants[*a].clone();
-                    self.stack.push(v);
-                },
-                ByteCode::StoreName => todo!(),
-                ByteCode::BinOP => todo!(),
-                ByteCode::MakeFunction => todo!(),
-                ByteCode::MakeStruct => todo!(),
-                ByteCode::MakeArray => todo!(),
-                ByteCode::Obj => todo!(),
-                ByteCode::Assign => todo!(),
-                ByteCode::Ret(c) => {
-                    let v = match self.stack.pop() {
-                        Some(v) => v,
-                        None => Value::None
-                    };
+                        self.stack.push(v);
+                    },
+                    ByteCode::Jump => {
+                        // self.pc = ins.arg;
 
-                    let side_effect = SideEffect::Return {
-                        value: v
-                    };
+                        // log::debug!("jumping to {}", self.pc);
+                    },
+                    ByteCode::JumpIfFalse(inx) => {
+                        let v = self.stack.pop().unwrap();
 
-                    side_effects.push(side_effect);
+                        match v {
+                            Value::Bool(b) => {
+                                if !b {
+                                    current.pc = *inx;
+                                }
+                            },
+                            _ => panic!("Invalid operation")
+                        }
+                    },
+                    ByteCode::Call(arg_count) => {
+                        let mut args = Vec::new();
+
+                        for _ in 0..*arg_count {
+                            let v = self.stack.pop().unwrap();
+                            args.push(v);
+                        }
+
+                        args.reverse();
+
+                        let callee = self.stack.pop().unwrap();
+
+                        match callee {
+                            Value::Fn(i) => {
+                                match self.run(i, args) {
+                                    Value::None => {},
+                                    v => self.stack.push(v)
+                                }
+                            },
+                            _ => panic!("Invalid operation")
+                        }
+                    },
+                    ByteCode::Cmp => {
+                        let tos = self.stack.pop().unwrap();
+                        let tos1 = self.stack.pop().unwrap();
+                        
+                        let v = match (tos, tos1) {
+                            (Value::Int(a), Value::Int(b)) => Value::Bool(a == b),
+                            (Value::Float(a), Value::Float(b)) => Value::Bool(a == b),
+                            (Value::Float(a), Value::Int(b)) => Value::Bool(a == b as f64),
+                            (Value::Int(a), Value::Float(b)) => Value::Bool(a as f64 == b),
+                            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a == b),
+                            (Value::Str(a), Value::Str(b)) => Value::Bool(a == b),
+                            _ => panic!("Invalid operation")
+                        };
+
+                        self.stack.push(v);
+                    },
+                    ByteCode::BeginScope => {
+                        self.scopes.push(self.stack_mem.len());
+                    },
+                    ByteCode::EndScope => {
+                        let scope_start = self.scopes.pop().unwrap();
+                        self.stack_mem.truncate(scope_start);
+                    },
+                    ByteCode::LoadConst(a) => {
+                        let v = self.constants[*a].clone();
+                        self.stack.push(v);
+                    },
+                    ByteCode::StoreName => todo!(),
+                    ByteCode::BinOP => todo!(),
+                    ByteCode::MakeStruct => todo!(),
+                    ByteCode::MakeArray(len) => {
+                        let mut items = vec![];
+
+                        for _ in 0..*len {
+                            let v = self.stack.pop().unwrap();
+                            items.push(v);
+                        }
+
+                        items.reverse();
+
+                        self.stack.push(Value::Array(items));
+                    },
+                    ByteCode::Obj => todo!(),
+                    ByteCode::Assign => todo!(),
+                    ByteCode::Ret(c) => {
+                        return match self.stack.pop() {
+                            Some(v) => v,
+                            None => Value::None
+                        };
+                    },
+                    ByteCode::Fun(i) => {
+                        self.stack.push(Value::Fn(*i));
+                    },
+                    _ => todo!("{:?}", c)
+                };
+            }
+
+            match self.call_stack.pop() {
+                Some(item) => {
+                    current = item;
                 },
-                _ => todo!()
-            };
-
-            if side_effects.len() > 0 {
-                break;
+                None => break
             }
         }
 
-        side_effects
+        Value::None
     }
 
     pub fn store_const(&mut self, v: Value) -> usize {
@@ -344,7 +398,8 @@ impl Vm {
             None => {
                 let i = self.next_idt;
                 self.next_idt += 1;
-                self.idt_map.insert(name, i);
+                self.idt_map.insert(name.clone(), i);
+                self.id_idt_map.insert(i, name);
                 i
             }
         }
@@ -361,8 +416,11 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    use crate::Array;
     use crate::Assign;
     use crate::BinOp;
+    use crate::Call;
+    use crate::Fun;
     use crate::Op;
     use crate::Ret;
 
@@ -377,16 +435,9 @@ mod tests {
             }
         );
         let file = vm.add_file(&vec![ret]);
-        let side_effects = vm.run(file);
+        let val = vm.run(file, vec![]);
 
-        assert_eq!(side_effects.len(), 1);
-
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::Int(1)
-        };
-
-        assert_eq!(effect, &expeted);
+        assert_eq!(val, Value::Int(1));
     }
 
     #[test]
@@ -406,16 +457,8 @@ mod tests {
             }
         );
         let block = vm.add_file(&vec![ret]);
-        let side_effects = vm.run(block);
-
-        assert_eq!(side_effects.len(), 1);
-
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::Int(2)
-        };
-
-        assert_eq!(effect, &expeted);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(2));
     }
 
     #[test]
@@ -435,16 +478,8 @@ mod tests {
             }
         );
         let block = vm.add_file(&vec![ret]);
-        let side_effects = vm.run(block);
-
-        assert_eq!(side_effects.len(), 1);
-
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::Bool(true)
-        };
-
-        assert_eq!(effect, &expeted);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Bool(true));
     }
 
     #[test]
@@ -470,16 +505,8 @@ mod tests {
             }
         );
         let block = vm.add_file(&vec![ret]);
-        let side_effects = vm.run(block);
-
-        assert_eq!(side_effects.len(), 1);
-
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::Int(1)
-        };
-
-        assert_eq!(effect, &expeted);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(1));
     }
 
     #[test]
@@ -505,16 +532,8 @@ mod tests {
             }
         );
         let block = vm.add_file(&vec![ret]);
-        let side_effects = vm.run(block);
-
-        assert_eq!(side_effects.len(), 1);
-
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::None
-        };
-
-        assert_eq!(effect, &expeted);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::None);
     }
 
     #[test]
@@ -535,15 +554,74 @@ mod tests {
             }
         );
         let block = vm.add_file(&vec![assign, ret]);
-        let side_effects = vm.run(block);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(1));
+    }
 
-        assert_eq!(side_effects.len(), 1);
+    #[test]
+    fn simple_array() {
+        let mut vm = Vm::new();
+        let ret = ASTNode::Ret(
+            Ret {
+                value: Box::new(Some(
+                    ASTNode::Array(
+                        Array {
+                            items: vec![
+                                ASTNode::Lit(Value::Int(1)),
+                                ASTNode::Lit(Value::Int(2)),
+                                ASTNode::Lit(Value::Int(3)),
+                            ]
+                        }
+                    )
+                ))
+            }
+        );
+        let block = vm.add_file(&vec![ret]);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Array(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+        ]));
+    }
 
-        let effect = &side_effects[0];
-        let expeted = SideEffect::Return {
-            value: Value::Int(1)
-        };
+    #[test]
+    fn function_calling() {
+        let mut vm = Vm::new();
+        let fun = ASTNode::Assign(
+            Assign {
+                left: Box::new(ASTNode::Ident("a".to_string())),
+                right: Box::new(ASTNode::Fun(
+                    Fun {
+                        params: vec![],
+                        body: vec![
+                            ASTNode::Ret(
+                                Ret {
+                                    value: Box::new(Some(
+                                        ASTNode::Lit(Value::Int(1))
+                                    ))
+                                }
+                            )
+                        ]  
+                    }
+                ))
+            }
+        );
 
-        assert_eq!(effect, &expeted);
+        let ret = ASTNode::Ret(
+            Ret {
+                value: Box::new(Some(
+                    ASTNode::Call(
+                        Call {
+                            callee: Box::new(ASTNode::Ident("a".to_string())),
+                            args: vec![]
+                        }
+                    )
+                ))
+            }
+        );
+        let block = vm.add_file(&vec![fun, ret]);
+        let val = vm.run(block, vec![]);
+        assert_eq!(val, Value::Int(1));
     }
 }

@@ -6,6 +6,7 @@ pub enum Value {
     Bool(bool),
     Array(Vec<Value>),
 	Ptr(usize),
+	Fn(usize),
     None,
 }
 
