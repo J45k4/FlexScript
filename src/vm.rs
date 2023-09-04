@@ -3,80 +3,37 @@ use std::collections::HashMap;
 use crate::ASTNode;
 use crate::ForCond;
 use crate::Op;
+use crate::Parser;
+use crate::RunResult;
 use crate::Value;
+use crate::callstack::Call;
+use crate::callstack::Callstack;
+use crate::scope::ScopeManager;
 use crate::vm_types::ByteCode;
 use crate::vm_types::File;
-use crate::vm_types::SideEffect;
-
-#[derive(Debug)]
-struct Scope {
-    scopes: Vec<HashMap<usize, Value>>
-}
-
-impl Scope {
-    fn new() -> Self {
-        Self {
-            scopes: vec![HashMap::new()],
-        }
-    }
-
-    fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
-    }
-
-    fn pop_scope(&mut self) {
-        self.scopes.pop();
-    }
-
-    fn insert(&mut self, id: usize, val: Value) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(id, val);
-        }
-    }
-
-    fn get(&self, var: &usize) -> Option<&Value> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(val) = scope.get(var) {
-                return Some(val);
-            }
-        }
-        None
-    }
-}
-
-#[derive(Debug)]
-struct CallItem {
-    blk: usize,
-    pc: usize,
-    args: Vec<Value>
-}
 
 pub struct Vm {
-    stack: Vec<Value>,
-    stack_mem: Vec<Value>,
     files: Vec<File>,
     scopes: Vec<usize>,
     constants: Vec<Value>,
     code_blocks: Vec<Vec<ByteCode>>,
-    call_stack: Vec<CallItem>,
+    callstacks: Vec<Callstack>,
     idt_map: HashMap<String, usize>,
     id_idt_map: HashMap<usize, String>,
     next_idt: usize,
-    scope: Scope,
+    scope: ScopeManager,
     pub log: usize
 }
 
 impl Vm {
     pub fn new() -> Self {
         Self {
-            stack: Vec::new(),
-            stack_mem: Vec::new(),
             files: Vec::new(),
             scopes: Vec::new(),
             constants: Vec::new(),
             code_blocks: Vec::new(),
-            call_stack: Vec::new(),
-            scope: Scope::new(),
+            callstacks: Vec::new(),
+            scope: ScopeManager::new(),
             idt_map: HashMap::new(),
             id_idt_map: HashMap::new(),
             next_idt: 0,
@@ -84,19 +41,20 @@ impl Vm {
         }
     }
 
-    pub fn add_file(&mut self, ast: &Vec<ASTNode>) -> usize {
+    pub fn compile_ast(&mut self, ast: &Vec<ASTNode>) -> usize {
         let mut code_block = Vec::new();
-
         for node in ast {
             self.compile_node(&mut code_block, node);
-        }
-
+        }   
         self.code_blocks.push(code_block);
-        
         self.code_blocks.len() - 1
     }
 
     pub fn compile_node(&mut self, block: &mut Vec<ByteCode>, node: &ASTNode) {
+        if self.log > 0 {
+            println!("compile: {:?}", node);
+        }
+
         match node {
             ASTNode::Lit(lit) => {
                 let i = self.store_const(lit.clone());
@@ -180,6 +138,17 @@ impl Vm {
                 for arg in &c.args {
                     self.compile_node(block, arg);
                 }
+
+                match &*c.callee {
+                    ASTNode::Ident(idt) => {
+                        if idt == "await" {
+                            block.push(ByteCode::Await);
+                            return;
+                        }
+                    },
+                    _ => {}
+                }
+
                 self.compile_node(block, &c.callee);
                 block.push(ByteCode::Call(c.args.len()));
             },
@@ -212,44 +181,47 @@ impl Vm {
         }
     }
 
-    pub fn run(&mut self, blk: usize, args: Vec<Value>) -> Value {
+    pub fn run_stack(&mut self, stack: usize) -> RunResult {
         if self.log > 0 {
-            println!("run: {} {:?}", blk, args);
+            println!("run stack: {}", stack);
         }
-
-        let mut current = CallItem {
-            args: args,
-            blk,
-            pc: 0
-        };
-        let code_block = &self.code_blocks[blk];
-        let len = code_block.len();
-
+        
         loop {
-            while current.pc < len {
-                let pc = current.pc;
-                current.pc += 1;
+            let stack = match self.callstacks.last_mut() {
+                Some(s) => s,
+                None => {
+                    if self.log > 0 {
+                        println!("no stack");
+                    }
+                    return RunResult::None;
+                }
+            };
+            let mut curr_blk = stack.blk();
 
-                let c = &self.code_blocks[current.blk][pc];
+            while stack.pc() < self.code_blocks[curr_blk].len() {
+                let pc = stack.pc();
+                stack.increment_pc();
+
+                let c = &self.code_blocks[curr_blk][pc];
 
                 if self.log > 0 {
-                    print!("pc: {}, code: {:?}", pc, c);
+                    print!("blk: {} pc: {}, code: {:?}", curr_blk, pc, c);
 
                     match c {
                         ByteCode::Load(i) => {
                             let name = self.id_idt_map.get(&i).unwrap();
-                            let v = self.scope.get(i).unwrap();
+                            let v = self.scope.lookup(stack.scope_id(), i);
                             print!(" {} {:?}", name, v);
                         },
                         ByteCode::Store(i) => {
                             let name = self.id_idt_map.get(&i).unwrap();
-                            let v = self.stack.last().unwrap();
+                            let v = stack.peek_value();
                             print!(" {} {:?}", name, v)
                         },
-                        ByteCode::JumpIfFalse(_) => print!(" {:?}", self.stack.last()),
-                        ByteCode::Next => print!(" {:?}", self.stack.last()),
+                        ByteCode::JumpIfFalse(_) => print!(" {:?}", stack.peek_value()),
+                        ByteCode::Next => print!(" {:?}", stack.peek_value()),
                         ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i].clone()),
-                        ByteCode::Ret(_) => print!(" {:?}", self.stack.last()),
+                        ByteCode::Ret(_) => print!(" {:?}", stack.peek_value()),
                         _ => {}
                     }
 
@@ -258,22 +230,22 @@ impl Vm {
 
                 match c {
                     ByteCode::Load(i) => {
-                        let v = match self.scope.get(i){
+                        let v = match self.scope.lookup(stack.scope_id(), i){
                             Some(v) => v.clone(),
                             None => panic!("variable not found")
                         };
-                        self.stack.push(v);
+                        stack.push_value(v);
                     },
                     ByteCode::Store(i) => {
-                        let v = self.stack.pop().unwrap();
-                        self.scope.insert(*i, v);
+                        let v = stack.pop_value().unwrap();
+                        self.scope.insert(stack.scope_id(), *i, v);
                     },
                     ByteCode::BinMul |
                     ByteCode::BinAdd |
                     ByteCode::BinMinus |
                     ByteCode::BinDivide => {
-                        let tos = self.stack.pop().unwrap();
-                        let tos1 = self.stack.pop().unwrap();
+                        let tos = stack.pop_value().unwrap();
+                        let tos1 = stack.pop_value().unwrap();
 
                         let v: Value = match (tos1,tos) {
                             (Value::Int(a), Value::Int(b)) => {
@@ -315,26 +287,26 @@ impl Vm {
                             _ => panic!("Invalid operation")
                         };
 
-                        self.push_stack(v);
+                        stack.push_value(v);
                     },
                     ByteCode::Jump(indx) => {
-                        current.pc = *indx;
+                        stack.set_pc(*indx);
                     },
                     ByteCode::JumpIfFalse(inx) => {
-                        let v = self.stack.pop().unwrap();
+                        let v = stack.pop_value().unwrap();
 
                         match v {
                             Value::Bool(b) => {
                                 if !b {
-                                    current.pc = *inx;
+                                    stack.set_pc(*inx);
                                 }
                             },
                             Value::None => {
-                                current.pc = *inx;
+                                stack.set_pc(*inx);
                             },
                             Value::Int(i) => {
                                 if i < 1 {
-                                    current.pc = *inx;
+                                    stack.set_pc(*inx);
                                 } 
                             },
                             _ => panic!("{:?}", v)
@@ -344,27 +316,46 @@ impl Vm {
                         let mut args = Vec::new();
 
                         for _ in 0..*arg_count {
-                            let v = self.stack.pop().unwrap();
+                            let v = stack.pop_value().unwrap();
                             args.push(v);
                         }   
 
                         args.reverse();
 
-                        let callee = self.stack.pop().unwrap();
+                        let callee = stack.pop_value().unwrap();
 
                         match callee {
-                            Value::Fn(i) => {
-                                match self.run(i, args) {
-                                    Value::None => {},
-                                    v => self.stack.push(v)
-                                }
+                            Value::Fn(blk) => {
+                                let scope_id = self.scope.create_child_scope(stack.scope_id());
+
+                                stack.push(Call {
+                                    args: Value::Array(args),
+                                    blk,
+                                    scope_id,
+                                    ..Default::default()
+                                });
+
+                                curr_blk = blk;
+
+                                // match r {
+                                //     RunResult::Value(v) => match v {
+                                //         Value::None => {},
+                                //         _ => stack.push_value(v)
+                                //     },
+                                //     RunResult::Await {
+                                //         value: v,
+                                //     } => return RunResult::Await {
+                                //         value: v
+                                //     },
+                                //     RunResult::None => {}
+                                // }
                             },
                             _ => panic!("Invalid operation")
                         }
                     },
                     ByteCode::Cmp => {
-                        let tos = self.stack.pop().unwrap();
-                        let tos1 = self.stack.pop().unwrap();
+                        let tos = stack.pop_value().unwrap();
+                        let tos1 = stack.pop_value().unwrap();
                         
                         let v = match (tos, tos1) {
                             (Value::Int(a), Value::Int(b)) => Value::Bool(a == b),
@@ -376,18 +367,19 @@ impl Vm {
                             _ => panic!("Invalid operation")
                         };
 
-                        self.stack.push(v);
+                        stack.push_value(v);
                     },
                     ByteCode::BeginScope => {
-                        self.scopes.push(self.stack_mem.len());
+                        let scope_id = self.scope.create_child_scope(stack.scope_id());
+                        stack.set_scope_id(scope_id);
                     },
                     ByteCode::EndScope => {
-                        let scope_start = self.scopes.pop().unwrap();
-                        self.stack_mem.truncate(scope_start);
+                        let parent_scope = self.scope.get_parent_scope(stack.scope_id()).unwrap();
+                        stack.set_scope_id(parent_scope);
                     },
                     ByteCode::LoadConst(a) => {
                         let v = self.constants[*a].clone();
-                        self.stack.push(v);
+                        stack.push_value(v);
                     },
                     ByteCode::StoreName => todo!(),
                     ByteCode::BinOP => todo!(),
@@ -396,27 +388,27 @@ impl Vm {
                         let mut items = vec![];
 
                         for _ in 0..*len {
-                            let v = self.stack.pop().unwrap();
+                            let v = stack.pop_value().unwrap();
                             items.push(v);
                         }
 
                         items.reverse();
 
-                        self.stack.push(Value::Array(items));
+                        stack.push_value(Value::Array(items));
                     },
                     ByteCode::Obj => todo!(),
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(c) => {
-                        return match self.stack.pop() {
-                            Some(v) => v,
-                            None => Value::None
+                        return match stack.pop_value() {
+                            Some(v) => RunResult::Value(v),
+                            None => RunResult::None
                         };
                     },
                     ByteCode::Fun(i) => {
-                        self.stack.push(Value::Fn(*i));
+                        stack.push_value(Value::Fn(*i));
                     },
                     ByteCode::Next => {
-                        let val = self.stack.last_mut().unwrap();
+                        let val = stack.peek_mut_value().unwrap();
 
                         let v = match val {
                             Value::ArrayIter {
@@ -429,7 +421,7 @@ impl Vm {
                                         v.clone()
                                     },
                                     None => {
-                                        self.stack.pop();
+                                        stack.pop_value();
                                         Value::None
                                     }
                                 }
@@ -437,14 +429,14 @@ impl Vm {
                             _ => todo!("{:?}", val)
                         };
 
-                        self.stack.push(v);
+                        stack.push_value(v);
                     },
                     ByteCode::MakeIter => {
-                        let val: Value = self.stack.pop().unwrap();
+                        let val: Value = stack.pop_value().unwrap();
 
                         match val {
                             Value::Array(arr) => {
-                                self.stack.push(Value::ArrayIter {
+                                stack.push_value(Value::ArrayIter {
                                     inx: 0,
                                     arr: arr
                                 });
@@ -452,27 +444,63 @@ impl Vm {
                             _ => todo!("{:?}", val)
                         }
                     },
+                    ByteCode::Await => {
+                        let val = stack.pop_value().unwrap();
+
+                        return RunResult::Await {
+                            value: val
+                        };
+                    },
                     _ => todo!("{:?}", c)
                 };
             }
 
-            match self.call_stack.pop() {
-                Some(item) => {
-                    current = item;
-                },
-                None => break
+            stack.pop();
+            if self.log > 0 {
+                println!("stack popped");
             }
+
+            if self.log > 1 {
+                println!("callstacks: {:?}", self.callstacks);
+            } 
         }
 
-        Value::None
+        RunResult::None
     }
 
-    pub fn push_stack(&mut self, v: Value) {
+    pub fn run_code(&mut self, code: &str) -> RunResult {
+        let ast = Parser::new(code).parse();
+        let blk = self.compile_ast(&ast);
+
         if self.log > 0 {
-            println!("push stack: {:?}", v);
+            println!("compiled ast to blk: {}", blk);
         }
 
-        self.stack.push(v);
+        self.run_blk(blk, Value::None)
+    }
+
+    pub fn run_blk(&mut self, blk: usize, args: Value) -> RunResult {
+        if self.log > 0 {
+            println!("run_blk blk: {} args: {:?}", blk, args);
+        }
+
+        let scope_id = self.scope.create_scope();
+
+        let mut stack = Callstack::new();
+        stack.log = self.log;
+        stack.push(Call {
+            blk: blk,
+            args: args,
+            scope_id,
+            ..Default::default()
+        });
+        self.callstacks.push(stack);
+
+        if self.log > 1 {
+            println!("callstacks: {:?}", self.callstacks);
+        }
+
+        self.run_stack(self.callstacks.len() - 1)
     }
 
     pub fn store_const(&mut self, v: Value) -> usize {
@@ -493,326 +521,116 @@ impl Vm {
             }
         }
     }
-
-    pub fn push(&mut self, v: Value) {
-        self.stack.push(v);
-    }
-
-    // fn store(&mut self, index: usize, value: Value) {
-    //     self.scopes[self.current].values[index] = value;
-    // }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::Array;
-    use crate::Assign;
-    use crate::BinOp;
-    use crate::Call;
-    use crate::For;
-    use crate::ForCond;
-    use crate::Fun;
-    use crate::Op;
-    use crate::Ret;
-
     use super::*;
 
     #[test]
     fn test_return_number() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(ASTNode::Lit(Value::Int(1))))
-            }
-        );
-        let file = vm.add_file(&vec![ret]);
-        let val = vm.run(file, vec![]);
-
-        assert_eq!(val, Value::Int(1));
+        vm.log = 1;
+        let res = vm.run_code("return 1");
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_plus() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::BinOp(
-                        BinOp {
-                            left: Box::new(ASTNode::Lit(Value::Int(1))),
-                            op: Op::Plus,
-                            right: Box::new(ASTNode::Lit(Value::Int(1)))
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(2));
+        let res = vm.run_code("return 1 + 1");
+        assert_eq!(res, RunResult::Value(Value::Int(2)));
     }
 
     #[test]
     fn simple_sub() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::BinOp(
-                        BinOp {
-                            left: Box::new(ASTNode::Lit(Value::Int(1))),
-                            op: Op::Minus,
-                            right: Box::new(ASTNode::Lit(Value::Int(1)))
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(0));
+        let res = vm.run_code("return 1 - 1");
+        assert_eq!(res, RunResult::Value(Value::Int(0)));
     }
 
     #[test]
     fn add_sub() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::BinOp(
-                        BinOp {
-                            left: Box::new(ASTNode::BinOp(
-                                BinOp {
-                                    left: Box::new(ASTNode::Lit(Value::Int(1))),
-                                    op: Op::Plus,
-                                    right: Box::new(ASTNode::Lit(Value::Int(1)))
-                                }
-                            )),
-                            op: Op::Minus,
-                            right: Box::new(ASTNode::Lit(Value::Int(1)))
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(1));
+        let res = vm.run_code("return 1 + 1 - 1");
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_comparsion() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::BinOp(
-                        BinOp {
-                            left: Box::new(ASTNode::Lit(Value::Int(1))),
-                            op: Op::Eq,
-                            right: Box::new(ASTNode::Lit(Value::Int(1)))
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Bool(true));
+        let res = vm.run_code("return 1 == 1");
+        assert_eq!(res, RunResult::Value(Value::Bool(true)));
     }
 
     #[test]
     fn simple_if_true() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::If(
-                        crate::If {
-                            cond: Box::new(ASTNode::Lit(Value::Bool(true))),
-                            body: vec![
-                                ASTNode::Ret(
-                                    Ret {
-                                        value: Box::new(Some(ASTNode::Lit(Value::Int(1))))
-                                    }
-                                )
-                            ],
-                            els: None
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(1));
+        let res = vm.run_code("if true { return 1 }");
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_if_false() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::If(
-                        crate::If {
-                            cond: Box::new(ASTNode::Lit(Value::Bool(false))),
-                            body: vec![
-                                ASTNode::Ret(
-                                    Ret {
-                                        value: Box::new(Some(ASTNode::Lit(Value::Int(1))))
-                                    }
-                                )
-                            ],
-                            els: None
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::None);
+        let res = vm.run_code("if false { return 1 }");
+        assert_eq!(res, RunResult::None);
     }
 
     #[test]
     fn assign_to_var() {
         let mut vm = Vm::new();
-        let assign = ASTNode::Assign(
-            Assign {
-                left: Box::new(ASTNode::Ident("a".to_string())),
-                right: Box::new(ASTNode::Lit(Value::Int(1)))
-            }
-        );
-
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::Ident("a".to_string())
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![assign, ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(1));
+        let res = vm.run_code(r#"
+        a = 1
+        return a
+        "#);
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_array() {
         let mut vm = Vm::new();
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::Array(
-                        Array {
-                            items: vec![
-                                ASTNode::Lit(Value::Int(1)),
-                                ASTNode::Lit(Value::Int(2)),
-                                ASTNode::Lit(Value::Int(3)),
-                            ]
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Array(vec![
+        let res = vm.run_code("return [1,2,3]");
+        assert_eq!(res, RunResult::Value(Value::Array(vec![
             Value::Int(1),
             Value::Int(2),
             Value::Int(3),
-        ]));
+        ])));
     }
 
     #[test]
     fn function_calling() {
         let mut vm = Vm::new();
-        let fun = ASTNode::Assign(
-            Assign {
-                left: Box::new(ASTNode::Ident("a".to_string())),
-                right: Box::new(ASTNode::Fun(
-                    Fun {
-                        params: vec![],
-                        body: vec![
-                            ASTNode::Ret(
-                                Ret {
-                                    value: Box::new(Some(
-                                        ASTNode::Lit(Value::Int(1))
-                                    ))
-                                }
-                            )
-                        ]  
-                    }
-                ))
-            }
-        );
-
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(
-                    ASTNode::Call(
-                        Call {
-                            callee: Box::new(ASTNode::Ident("a".to_string())),
-                            args: vec![]
-                        }
-                    )
-                ))
-            }
-        );
-        let block = vm.add_file(&vec![fun, ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(1));
+        vm.log = 2;
+        let res = vm.run_code(r#"
+        a = () => return 1
+        return a()
+        "#);
+        println!("{:?}", vm.code_blocks);
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_for() {
         let mut vm = Vm::new();
-        let var = ASTNode::Assign(
-            Assign {
-                left: Box::new(ASTNode::Ident("state".to_string())),
-                right: Box::new(ASTNode::Lit(Value::Int(0)))
-            }
-        );
+        let res = vm.run_code(r#"
+        state = 0
+        for a in [1,2,3] {
+            state = state - a
+        }
+        return state
+        "#);
+        assert_eq!(res, RunResult::Value(Value::Int(-6)));
+    }
 
-        let increment_expr = ASTNode::Assign(
-            Assign { 
-                left: Box::new(ASTNode::Ident("state".to_string())),
-                right: Box::new(ASTNode::BinOp(
-                    BinOp {
-                        left: Box::new(ASTNode::Ident("state".to_string())),
-                        op: Op::Minus,
-                        right: Box::new(ASTNode::Ident("a".to_string()))
-                    }
-                ))
-            }
-        );
-        let forr = ASTNode::For(
-            For {
-                cond: ForCond::FromIt {
-                    ident: "a".to_string(),
-                    it: Box::new(ASTNode::Array(
-                        Array {
-                            items: vec![
-                                ASTNode::Lit(Value::Int(1)),
-                                ASTNode::Lit(Value::Int(2)),
-                                ASTNode::Lit(Value::Int(3)),
-                            ]
-                        }
-                    ))
-                },
-                body: vec![
-                    increment_expr
-                ]
-            }
-        );
+    #[test]
+    fn await_fun() {
+        let mut vm = Vm::new();
+        vm.log = 1;
+        let res = vm.run_code("a = await(test())");
 
-        let ret = ASTNode::Ret(
-            Ret {
-                value: Box::new(Some(ASTNode::Ident("state".to_string())))
-            }
-        );
-        let block = vm.add_file(&vec![var, forr, ret]);
-        let val = vm.run(block, vec![]);
-        assert_eq!(val, Value::Int(-6));
+        assert_eq!(res, RunResult::Await {
+            value: Value::Fn(0)
+        });
     }
 }

@@ -15,6 +15,12 @@ pub enum Value {
     None,
 }
 
+impl Default for Value {
+	fn default() -> Self {
+		Self::None
+	}
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Assign {
 	pub left: Box<ASTNode>,
@@ -159,4 +165,14 @@ pub enum ASTNode {
 	BinOp(BinOp),
 	If(If),
 	For(For),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum RunResult {
+	Value(Value),
+	Await {
+		value: Value,
+		
+	},
+	None
 }

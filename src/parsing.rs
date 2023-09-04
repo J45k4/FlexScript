@@ -62,6 +62,10 @@ enum Token {
 	Eq,
 	#[token("=")]
 	Assign,
+	#[token("true")]
+	True,
+	#[token("false")]
+	False,
 	#[regex(r#""[^"]*""#, |t| t.slice()[1..t.slice().len()-1].to_string())]
 	String(String),
 	#[regex(r"-?[0-9]+", |t| t.slice().parse::<i64>().ok(), priority = 2)]
@@ -856,6 +860,8 @@ impl Parser {
 			Token::String(s) => ASTNode::Lit(Value::Str(s)),
 			Token::Int(num) => ASTNode::Lit(Value::Int(num)),
 			Token::Float(num) => ASTNode::Lit(Value::Float(num)),
+			Token::True => ASTNode::Lit(Value::Bool(true)),
+			Token::False => ASTNode::Lit(Value::Bool(false)),
 			Token::OpenParen => {
 				let node = self.parse_expr();
 				
