@@ -7,3 +7,4 @@ mod callstack;
 
 pub use types::*;
 pub use parsing::*;
+pub use vm::*;
