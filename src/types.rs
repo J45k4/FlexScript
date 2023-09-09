@@ -12,6 +12,11 @@ pub enum Value {
 		inx: usize,
 		arr: Vec<Value>
 	},
+	UndefIdent(usize),
+	UndefCall {
+		ident: usize,
+		args: Vec<Value>
+	},
     None,
 }
 
@@ -171,8 +176,8 @@ pub enum ASTNode {
 pub enum RunResult {
 	Value(Value),
 	Await {
+		stack_id: usize,
 		value: Value,
-		
 	},
 	None
 }

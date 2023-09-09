@@ -181,13 +181,19 @@ impl Vm {
         }
     }
 
-    pub fn run_stack(&mut self, stack: usize) -> RunResult {
+    pub fn cont(&mut self, stack_id: usize, value: Value) -> RunResult {
+        let stack = self.callstacks.get_mut(stack_id).unwrap();
+        stack.push_value(value);
+        self.run_stack(stack_id)
+    }
+
+    pub fn run_stack(&mut self, stack_id: usize) -> RunResult {
         if self.log > 0 {
-            println!("run stack: {}", stack);
+            println!("run stack: {}", stack_id);
         }
         
         loop {
-            let stack = match self.callstacks.last_mut() {
+            let stack = match self.callstacks.get_mut(stack_id) {
                 Some(s) => s,
                 None => {
                     if self.log > 0 {
@@ -238,11 +244,8 @@ impl Vm {
 
                 match c {
                     ByteCode::Load(i) => {
-                        let v = match self.scope.lookup(stack.scope_id(), i){
-                            Some(v) => v.clone(),
-                            None => panic!("variable not found")
-                        };
-                        stack.push_value(v);
+                        let v = self.scope.lookup(stack.scope_id(), i);
+                        stack.push_value(v.clone());
                     },
                     ByteCode::Store(i) => {
                         let v = stack.pop_value().unwrap();
@@ -358,7 +361,13 @@ impl Vm {
                                 //     RunResult::None => {}
                                 // }
                             },
-                            _ => panic!("Invalid operation")
+                            Value::UndefIdent(idt) => {
+                                stack.push_value(Value::UndefCall {
+                                    ident: idt,
+                                    args: args
+                                })
+                            },
+                            _ => panic!("invalid callee {:?}", callee)
                         }
                     },
                     ByteCode::Cmp => {
@@ -456,6 +465,7 @@ impl Vm {
                         let val = stack.pop_value().unwrap();
 
                         return RunResult::Await {
+                            stack_id,
                             value: val
                         };
                     },
@@ -581,6 +591,7 @@ mod tests {
     #[test]
     fn simple_if_false() {
         let mut vm = Vm::new();
+        vm.log = 1;
         let res = vm.run_code("if false { return 1 }");
         assert_eq!(res, RunResult::None);
     }
@@ -638,7 +649,11 @@ mod tests {
         let res = vm.run_code("a = await(test())");
 
         assert_eq!(res, RunResult::Await {
-            value: Value::Fn(0)
+            stack_id: 0,
+            value: Value::UndefCall { 
+                ident: 0, 
+                args: vec![] 
+            }
         });
     }
 }

@@ -23,19 +23,22 @@ impl ScopeManager {
         scope.vars.insert(var_id, val);
     }
 
-    pub fn lookup(&self, scope_id: usize, var_id: &usize) -> Option<&Value> {
+    pub fn lookup(&self, scope_id: usize, var_id: &usize) -> Value {
         let mut current_scope = scope_id;
 
         loop {
-            let scope = self.scopes.get(current_scope)?;
+            let scope = match self.scopes.get(current_scope) {
+                Some(scope) => scope,
+                None => return Value::UndefIdent(*var_id)
+            };
 
             if let Some(val) = scope.vars.get(var_id) {
-                return Some(val);
+                return val.clone();
             }
 
             match scope.parent_id {
                 Some(parent_id) => current_scope = parent_id,
-                None => return None
+                None => return Value::UndefIdent(*var_id)
             }
         }
     }
