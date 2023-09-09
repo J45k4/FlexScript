@@ -170,7 +170,13 @@ impl Parser {
 			self.log(&format!("expect_eat: {:?}", token));
 		}
 
-		let next = self.eat().unwrap();
+		let next = match self.eat() {
+			Some(token) => token,
+			None => {
+				println!("{}", self.curr_loc());
+				panic!("Unexpected end of input");
+			},
+		};
 
 		if next != token {
 			println!("{}", self.curr_loc());
@@ -191,7 +197,13 @@ impl Parser {
 			self.log(&format!("expect_ident"));
 		}
 
-		let token = self.eat().unwrap();
+		let token = match self.eat() {
+			Some(token) => token,
+			None => {
+				println!("{}", self.curr_loc());
+				panic!("Unexpected end of input");
+			},
+		};
 
 		match token {
 			Token::Ident(ident) => ident,
@@ -261,6 +273,28 @@ impl Parser {
 		nodes
 	}
 
+	fn parse_array(&mut self) -> ASTNode {
+		self.skip(1);
+		let mut items = Vec::new();
+
+		while let Some(token) = self.peek(0) {
+			match token {
+				Token::CloseBracket => {
+					self.skip(1);
+					break;
+				},
+				Token::Comma => {
+					self.skip(1);
+				},
+				_ => {
+					items.push(self.parse_item().unwrap());
+				}
+			}
+		}
+
+		ASTNode::Array(Array { items })
+	}
+
 	fn parse_item(&mut self) -> Option<ASTNode> {
 		if self.loglevel > 0 {
 			self.callstack.push("parse_item".to_string());
@@ -311,27 +345,7 @@ impl Parser {
 					}
 				}
 			}
-			Token::OpenBracket => {
-				self.skip(1);
-				let mut items = Vec::new();
-
-				while let Some(token) = self.peek(0) {
-					match token {
-						Token::CloseBracket => {
-							self.skip(1);
-							break;
-						},
-						Token::Comma => {
-							self.skip(1);
-						},
-						_ => {
-							items.push(self.parse_item().unwrap());
-						}
-					}
-				}
-
-				Some(ASTNode::Array(Array { items }))
-			}
+			Token::OpenBracket => Some(self.parse_array()),
 			Token::OpenParen => {
 				// In here we check if future tokens contain an close paren and an arrow
 				// If so, we parse a function, otherwise we parse an expression
@@ -376,6 +390,25 @@ impl Parser {
 		ret
 	}
 
+	fn parse_for_it(&mut self) -> ASTNode {
+		let token = match self.peek(0) {
+			Some(token) => token.clone(),
+			None => {
+				println!("{}", self.curr_loc());
+				panic!("Unexpected end of input");
+			},
+		};
+
+		match token {
+			Token::OpenBracket => self.parse_array(),
+			Token::Ident(idt) => {
+				self.skip(1);
+				ASTNode::Ident(idt)
+			}
+			_ => self.parse_expr()
+		}
+	}
+
 	fn parse_for(&mut self) -> ASTNode {
 		self.skip(1);
 
@@ -385,7 +418,7 @@ impl Parser {
 				match self.peek(0) {
 					Some(Token::In) => {
 						self.skip(1);
-						let it = self.parse_expr();
+						let it = self.parse_for_it();
 						self.expect_eat(Token::OpenBrace);
 
 						let mut body = Vec::new();
@@ -1709,7 +1742,6 @@ mod tests {
 		"#;
 
 		let ast = Parser::new(code)
-			.set_loglevel(1)
 			.parse();
 
 		let expected = vec![
@@ -1849,6 +1881,7 @@ mod tests {
 		"#;
 
 		let ast = Parser::new(code)
+			.set_loglevel(1)
 			.parse();
 
 		let expected = vec![
@@ -1857,6 +1890,42 @@ mod tests {
 					cond: ForCond::FromIt {
 						ident: "i".to_string(),
 						it: Box::new(ASTNode::Ident("iterator".to_string())),
+					},
+					body: vec![],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn for_array() {
+		let code = r#"
+			for i in [1, 2, 3] {
+
+			}
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::For(
+				For {
+					cond: ForCond::FromIt {
+						ident: "i".to_string(),
+						it: Box::new(
+							ASTNode::Array(
+								Array {
+									items: vec![
+										ASTNode::Lit(Value::Int(1)),
+										ASTNode::Lit(Value::Int(2)),
+										ASTNode::Lit(Value::Int(3)),
+									],
+								}
+							)
+						),
 					},
 					body: vec![],
 				}
