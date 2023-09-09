@@ -50,6 +50,11 @@ impl Vm {
         self.code_blocks.len() - 1
     }
 
+    pub fn compile_code(&mut self, code: &str) -> usize {
+        let ast = Parser::new(code).parse();
+        self.compile_ast(&ast)
+    }
+
     pub fn compile_node(&mut self, block: &mut Vec<ByteCode>, node: &ASTNode) {
         if self.log > 0 {
             println!("compile: {:?}", node);
