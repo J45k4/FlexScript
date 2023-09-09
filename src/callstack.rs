@@ -74,8 +74,11 @@ impl Callstack {
         self.stack.last().unwrap().pc
     }
 
-    pub fn blk(&self) -> usize {
-        self.stack.last().unwrap().blk
+    pub fn blk(&self) -> Option<usize> {
+        match self.stack.last() {
+            Some(call) => Some(call.blk),
+            None => None,
+        }
     }
 
     pub fn scope_id(&self) -> usize {

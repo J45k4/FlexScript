@@ -196,7 +196,15 @@ impl Vm {
                     return RunResult::None;
                 }
             };
-            let mut curr_blk = stack.blk();
+            let mut curr_blk = match stack.blk() {
+                Some(b) => b,
+                None => {
+                    if self.log > 0 {
+                        println!("no blk");
+                    }
+                    return RunResult::None;
+                }
+            };
 
             while stack.pc() < self.code_blocks[curr_blk].len() {
                 let pc = stack.pc();
