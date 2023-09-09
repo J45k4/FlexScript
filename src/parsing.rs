@@ -26,6 +26,8 @@ enum Token {
 	#[token("\n", skip)]
 	#[token("\r", skip)]
 	Whitespace,
+	#[regex("//[^\n]*", skip)]
+	Comment_,
 	#[token("for")]
 	For,
 	#[token("in")]
@@ -1928,6 +1930,28 @@ mod tests {
 						),
 					},
 					body: vec![],
+				}
+			)
+		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn single_line_comments() {
+		let code = r#"
+		// This is a comment
+		a = 1 // This is also a comment
+		"#;
+
+		let ast = Parser::new(code)
+			.parse();
+
+		let expected = vec![
+			ASTNode::Assign(
+				Assign {
+					left: Box::new(ASTNode::Ident("a".to_string())),
+					right: Box::new(ASTNode::Lit(Value::Int(1))),
 				}
 			)
 		];
