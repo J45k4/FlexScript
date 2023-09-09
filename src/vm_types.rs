@@ -21,7 +21,7 @@ pub enum ByteCode {
     Fun(usize),
     MakeStruct,
     MakeArray(usize),
-    Obj,
+    Obj(usize),
     Assign,
     Ret(usize),
     Var(usize),

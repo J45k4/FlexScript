@@ -15,7 +15,7 @@ use crate::types::Op;
 use crate::types::ProbAccess;
 use crate::types::Property;
 use crate::types::Ret;
-use crate::types::StructIns;
+use crate::types::ObjIns;
 use crate::types::Value;
 use crate::types::Var;
 
@@ -651,12 +651,12 @@ impl Parser {
 			}
 		}
 
-		let b = StructIns {
-			name: name.to_string(),
-			probs: props,
+		let b = ObjIns {
+			name: Some(name.to_string()),
+			props,
 		};
 
-		ASTNode::StructIns(b)
+		ASTNode::ObjIns(b)
 	}
 
 	fn parse_expr(&mut self) -> ASTNode {
@@ -1362,10 +1362,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "Ball".to_string(),
-					probs: vec![],
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("Ball".to_string()),
+					props: vec![],
 				}
 			)
 		];
@@ -1387,10 +1387,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "Ball".to_string(),
-					probs: vec![
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("Ball".to_string()),
+					props: vec![
 						Property {
 							name: "x".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Int(1))),
@@ -1492,10 +1492,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "Div".to_string(),
-					probs: vec![
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("Div".to_string()),
+					props: vec![
 						Property {
 							name: "on_click".to_string(),
 							value: Box::new(
@@ -1658,10 +1658,10 @@ mod tests {
 			ASTNode::Array(
 				Array {
 					items: vec![
-						ASTNode::StructIns(
-							StructIns {
-								name: "Div".to_string(),
-								probs: vec![],
+						ASTNode::ObjIns(
+							ObjIns {
+								name: Some("Div".to_string()),
+								props: vec![],
 							}
 						)
 					],
@@ -1682,10 +1682,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "Vertex".to_string(),
-					probs: vec![
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("Vertex".to_string()),
+					props: vec![
 						Property {
 							name: "x".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Float(-0.6))),
@@ -1718,10 +1718,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "H1".to_string(),
-					probs: vec![
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("H1".to_string()),
+					props: vec![
 						Property {
 							name: "text".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Str("Todo".to_string()))),
@@ -1747,10 +1747,10 @@ mod tests {
 			.parse();
 
 		let expected = vec![
-			ASTNode::StructIns(
-				StructIns {
-					name: "Input".to_string(),
-					probs: vec![
+			ASTNode::ObjIns(
+				ObjIns {
+					name: Some("Input".to_string()),
+					props: vec![
 						Property {
 							name: "type".to_string(),
 							value: Box::new(ASTNode::Lit(Value::Str("text".to_string()))),

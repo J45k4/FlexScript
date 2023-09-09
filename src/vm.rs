@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use crate::ASTNode;
 use crate::ForCond;
+use crate::Obj;
+use crate::ObjProp;
 use crate::Op;
 use crate::Parser;
 use crate::RunResult;
@@ -181,6 +183,20 @@ impl Vm {
 
                 block.push(ByteCode::Jump(start_pc));
                 block[false_jump_pc] = ByteCode::JumpIfFalse(block.len());
+            },
+            ASTNode::ObjIns(obj) => {
+                // block.push(ByteCode::LoadConst(self.store_const(Value::Str(obj.name.clone()))));
+                for prop in &obj.props {
+                    let c: usize = self.store_const(Value::Str(prop.name.clone()));
+                    block.push(ByteCode::LoadConst(c));
+                    self.compile_node(block, &prop.value);
+                }
+                if let Some(name) = &obj.name {
+                    block.push(ByteCode::LoadConst(self.store_const(Value::Str(name.clone()))));
+                } else {
+                    block.push(ByteCode::LoadConst(self.store_const(Value::None)));
+                }
+                block.push(ByteCode::Obj(obj.props.len()));
             },
             _ => todo!("{:?}", node)
         }
@@ -418,7 +434,6 @@ impl Vm {
 
                         stack.push_value(Value::Array(items));
                     },
-                    ByteCode::Obj => todo!(),
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(c) => {
                         return match stack.pop_value() {
@@ -473,6 +488,39 @@ impl Vm {
                             stack_id,
                             value: val
                         };
+                    },
+                    ByteCode::Obj(arg_count) => {
+                        let name = match stack.pop_value() {
+                            Some(v) => match v {
+                                Value::Str(s) => Some(s),
+                                _ => todo!("{:?}", v)
+                            },
+                            None => None
+                        };
+                        
+                        let mut obj = Obj {
+                            name,
+                            props: vec![]
+                        };
+
+                        for _ in 0..*arg_count {
+                            let v = stack.pop_value().unwrap();
+                            let k = stack.pop_value().unwrap();
+
+                            let key = match k {
+                                Value::Str(s) => s,
+                                _ => todo!("{:?}", k)
+                            };
+
+                            obj.props.push(
+                                ObjProp {
+                                    name: key,
+                                    value: v
+                                }
+                            );
+                        }
+
+                        stack.push_value(Value::Obj(obj));
                     },
                     _ => todo!("{:?}", c)
                 };
@@ -548,6 +596,8 @@ impl Vm {
 
 #[cfg(test)]
 mod tests {
+    use crate::Obj;
+
     use super::*;
 
     #[test]
@@ -673,5 +723,24 @@ mod tests {
             },
             _ => panic!("Invalid result")
         }
+    }
+
+    #[test]
+    fn return_obj_instance() {
+        let mut vm = Vm::new();
+        vm.log = 1;
+        let res = vm.run_code(r#"return H1 { text: "lol" }"#);
+
+        assert_eq!(res, RunResult::Value(Value::Obj(
+            Obj {
+                name: Some("H1".to_string()),
+                props: vec![
+                    ObjProp {
+                        name: "text".to_string(),
+                        value: Value::Str("lol".to_string())
+                    }
+                ]
+            }
+        )));
     }
 }

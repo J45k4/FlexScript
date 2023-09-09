@@ -1,4 +1,16 @@
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ObjProp {
+	pub name: String,
+	pub value: Value
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Obj {
+	pub name: Option<String>,
+	pub props: Vec<ObjProp>
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
@@ -8,6 +20,7 @@ pub enum Value {
     Array(Vec<Value>),
 	Ptr(usize),
 	Fn(usize),
+	Obj(Obj),
 	ArrayIter {
 		inx: usize,
 		arr: Vec<Value>
@@ -39,14 +52,9 @@ pub struct Property {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct StructIns {
-	pub name: String,
-	pub probs: Vec<Property>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Obj {
-	pub probs: Vec<Property>,
+pub struct ObjIns {
+	pub name: Option<String>,
+	pub props: Vec<Property>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -154,7 +162,7 @@ pub struct For {
 pub enum ASTNode {
 	Ident(String),
 	Assign(Assign),
-	StructIns(StructIns),
+	ObjIns(ObjIns),
 	Array(Array),
 	Call(Call),
 	Property(String, Box<ASTNode>),
@@ -165,7 +173,6 @@ pub enum ASTNode {
 	TypeDef(TypeDef),
 	Var(Var),
 	ProbAccess(ProbAccess),
-	Obj(Obj),
 	Ret(Ret),
 	BinOp(BinOp),
 	If(If),
