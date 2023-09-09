@@ -645,8 +645,7 @@ mod tests {
     #[test]
     fn await_fun() {
         let mut vm = Vm::new();
-        vm.log = 1;
-        let res = vm.run_code("a = await(test())");
+        let res = vm.run_code("await(test())");
 
         assert_eq!(res, RunResult::Await {
             stack_id: 0,
@@ -655,5 +654,19 @@ mod tests {
                 args: vec![] 
             }
         });
+    }
+
+    #[test]
+    fn await_fun_return_result() {
+        let mut vm = Vm::new();
+        let res = vm.run_code(r#"return await(test())"#);
+
+        match res {
+            RunResult::Await { stack_id, value } => {
+                let res = vm.cont(stack_id, Value::Int(1));
+                assert_eq!(res, RunResult::Value(Value::Int(1)));
+            },
+            _ => panic!("Invalid result")
+        }
     }
 }
