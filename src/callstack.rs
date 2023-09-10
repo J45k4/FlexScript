@@ -1,25 +1,24 @@
-use crate::Value;
-
+use crate::StackValue;
 
 #[derive(Debug, Default)]
 pub struct Call {
     pub blk: usize,
     pub pc: usize,
     pub scope_id: usize,
-    pub args: Value,
-    pub values: Vec<Value>,
+    pub args: Vec<StackValue>,
+    pub values: Vec<StackValue>,
 }
 
 impl Call {
-    pub fn push(&mut self, val: Value) {
+    pub fn push(&mut self, val: StackValue) {
         self.values.push(val);
     }
 
-    pub fn pop(&mut self) -> Option<Value> {
+    pub fn pop(&mut self) -> Option<StackValue> {
         self.values.pop()
     }
 
-    pub fn peek(&self) -> Option<&Value> {
+    pub fn peek(&self) -> Option<&StackValue> {
         self.values.last()
     }
 }
@@ -38,19 +37,19 @@ impl Callstack {
         }
     }
 
-    pub fn push_value(&mut self, val: Value) {
+    pub fn push_value(&mut self, val: StackValue) {
         self.stack.last_mut().unwrap().push(val);
     }
  
-    pub fn pop_value(&mut self) -> Option<Value> {
+    pub fn pop_value(&mut self) -> Option<StackValue> {
         self.stack.last_mut().unwrap().pop()
     }
 
-    pub fn peek_value(&self) -> Option<&Value> {
+    pub fn peek_value(&self) -> Option<&StackValue> {
         self.stack.last().unwrap().peek()
     }
 
-    pub fn peek_mut_value(&mut self) -> Option<&mut Value> {
+    pub fn peek_mut_value(&mut self) -> Option<&mut StackValue> {
         self.stack.last_mut().unwrap().values.last_mut()
     }
 

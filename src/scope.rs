@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use crate::Value;
+
+use crate::StackValue;
 
 #[derive(Debug)]
 struct Scope {
     parent_id: Option<usize>,
-    vars: HashMap<usize, Value>
+    vars: HashMap<usize, StackValue>
 }
 
 pub struct ScopeManager {
@@ -18,18 +19,18 @@ impl ScopeManager {
         }
     }
 
-    pub fn insert(&mut self, scope_id: usize, var_id: usize, val: Value) {
+    pub fn insert(&mut self, scope_id: usize, var_id: usize, val: StackValue) {
         let scope = self.scopes.get_mut(scope_id).unwrap();
         scope.vars.insert(var_id, val);
     }
 
-    pub fn lookup(&self, scope_id: usize, var_id: &usize) -> Value {
+    pub fn lookup(&self, scope_id: usize, var_id: &usize) -> StackValue {
         let mut current_scope = scope_id;
 
         loop {
             let scope = match self.scopes.get(current_scope) {
                 Some(scope) => scope,
-                None => return Value::UndefIdent(*var_id)
+                None => return StackValue::UndefRef(*var_id)
             };
 
             if let Some(val) = scope.vars.get(var_id) {
@@ -38,7 +39,7 @@ impl ScopeManager {
 
             match scope.parent_id {
                 Some(parent_id) => current_scope = parent_id,
-                None => return Value::UndefIdent(*var_id)
+                None => return StackValue::UndefRef(*var_id)
             }
         }
     }

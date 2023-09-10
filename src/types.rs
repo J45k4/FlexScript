@@ -2,7 +2,7 @@
 #[derive(Debug, PartialEq, Clone)]
 pub struct ObjProp {
 	pub name: String,
-	pub value: Value
+	pub value: HeapValue
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -21,6 +21,8 @@ pub enum Value {
 	Ptr(usize),
 	Fn(usize),
 	Obj(Obj),
+	ObjRef(usize),
+	ListRef(usize),
 	ArrayIter {
 		inx: usize,
 		arr: Vec<Value>
@@ -34,6 +36,75 @@ pub enum Value {
 }
 
 impl Default for Value {
+	fn default() -> Self {
+		Self::None
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum HeapValue {
+	Obj(Obj),
+	List(Vec<HeapValue>),
+	Fn(usize),
+	Ref(usize),
+	Int(i64),
+	Float(f64),
+	Bool(bool),
+	Str(String),
+	None
+}
+
+impl From<StackValue> for HeapValue {
+	fn from(val: StackValue) -> Self {
+		match val {
+			StackValue::Int(i) => Self::Int(i),
+			StackValue::Float(f) => Self::Float(f),
+			StackValue::Str(s) => Self::Str(s),
+			StackValue::Bool(b) => Self::Bool(b),
+			StackValue::Ref(r) => Self::Ref(r),
+			StackValue::UndefRef(r) => Self::Ref(r),
+			StackValue::FnRef(r) => Self::Fn(r),
+			StackValue::ArrayIter { i, list_id } => {
+				let list = vec![Self::Ref(list_id); i];
+				Self::List(list)
+			},
+			StackValue::Prop { obj_id, prop } => {
+				let obj = Obj {
+					name: None,
+					props: vec![ObjProp {
+						name: "prop".to_string(),
+						value: Self::Ref(obj_id)
+					}]
+				};
+
+				Self::Obj(obj)
+			},
+			StackValue::None => Self::None
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum StackValue {
+	Int(i64),
+	Float(f64),
+	Str(String),
+	Bool(bool),
+	Ref(usize),
+	UndefRef(usize),
+	FnRef(usize),
+	ArrayIter {
+		i: usize,
+		list_id: usize
+	},
+	Prop {
+		obj_id: usize,
+		prop: usize
+	},
+	None
+}
+
+impl Default for StackValue {
 	fn default() -> Self {
 		Self::None
 	}
@@ -181,10 +252,10 @@ pub enum ASTNode {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RunResult {
-	Value(Value),
+	Value(HeapValue),
 	Await {
 		stack_id: usize,
-		value: Value,
+		value: HeapValue,
 	},
 	None
 }

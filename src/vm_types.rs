@@ -25,6 +25,7 @@ pub enum ByteCode {
     Assign,
     Ret(usize),
     Var(usize),
+    LoadField(usize),
     Next,
     MakeIter,
     Await
