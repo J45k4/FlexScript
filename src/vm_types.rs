@@ -3,43 +3,30 @@ use crate::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ByteCode {
-    Load(usize),
-    LoadConst(usize),
-    Store(usize),
-    StoreName,
-    BinOP,
+    Load(u32),
+    LoadConst(u32),
+    Store(u32),
     BinMul,
     BinAdd,
     BinMinus,
     BinDivide,
-    Jump(usize),
-    JumpIfFalse(usize),
-    Call(usize),
+    Jump(u32),
+    JumpIfFalse(u32),
+    Call(u32),
     Cmp,
     BeginScope,
     EndScope,
-    Fun(usize),
+    Fun(u32),
     MakeStruct,
-    MakeArray(usize),
-    Obj(usize),
+    MakeArray(u32),
+    Obj(u32),
     Assign,
-    Ret(usize),
-    Var(usize),
+    Ret(u32),
+    Var(u32),
     Next,
     MakeIter,
     Await
 }
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum Value {
-//     Int(i64),
-//     Float(f64),
-//     String(String),
-//     Bool(bool),
-//     None,
-//     ExtRef(usize),
-//     Ref(usize),
-// }
 
 pub struct Ins {
     pub code: ByteCode,

@@ -7,22 +7,21 @@ use crate::ObjProp;
 use crate::Op;
 use crate::Parser;
 use crate::RunResult;
+use crate::StackValue;
 use crate::Value;
 use crate::callstack::Call;
 use crate::callstack::Callstack;
 use crate::scope::ScopeManager;
 use crate::vm_types::ByteCode;
-use crate::vm_types::File;
 
 pub struct Vm {
-    files: Vec<File>,
     scopes: Vec<usize>,
     constants: Vec<Value>,
     code_blocks: Vec<Vec<ByteCode>>,
     callstacks: Vec<Callstack>,
-    idt_map: HashMap<String, usize>,
-    id_idt_map: HashMap<usize, String>,
-    next_idt: usize,
+    idt_map: HashMap<String, u32>,
+    id_idt_map: HashMap<u32, String>,
+    next_idt: u32,
     scope: ScopeManager,
     pub log: usize
 }
@@ -30,7 +29,6 @@ pub struct Vm {
 impl Vm {
     pub fn new() -> Self {
         Self {
-            files: Vec::new(),
             scopes: Vec::new(),
             constants: Vec::new(),
             code_blocks: Vec::new(),
@@ -43,16 +41,16 @@ impl Vm {
         }
     }
 
-    pub fn compile_ast(&mut self, ast: &Vec<ASTNode>) -> usize {
+    pub fn compile_ast(&mut self, ast: &Vec<ASTNode>) -> u32 {
         let mut code_block = Vec::new();
         for node in ast {
             self.compile_node(&mut code_block, node);
         }   
         self.code_blocks.push(code_block);
-        self.code_blocks.len() - 1
+        (self.code_blocks.len() - 1) as u32
     }
 
-    pub fn compile_code(&mut self, code: &str) -> usize {
+    pub fn compile_code(&mut self, code: &str) -> u32 {
         let ast = Parser::new(code).parse();
         self.compile_ast(&ast)
     }
@@ -105,7 +103,7 @@ impl Vm {
                     self.compile_node(block, node);
                 }
 
-                block[jump_if_false_inx] = ByteCode::JumpIfFalse(block.len());
+                block[jump_if_false_inx] = ByteCode::JumpIfFalse(block.len() as u32);
 
                 if let Some(els) = &ifs.els {
                     for node in els {
@@ -131,7 +129,7 @@ impl Vm {
                 for item in &a.items {
                     self.compile_node(block, item);
                 }
-                block.push(ByteCode::MakeArray(a.items.len()));
+                block.push(ByteCode::MakeArray(a.items.len() as u32));
             },
             ASTNode::Fun(f) => {
                 let mut fun_block = Vec::new();
@@ -139,7 +137,7 @@ impl Vm {
                     self.compile_node(&mut fun_block, node);
                 }
                 self.code_blocks.push(fun_block);
-                block.push(ByteCode::Fun(self.code_blocks.len() - 1));
+                block.push(ByteCode::Fun((self.code_blocks.len() - 1) as u32));
             },
             ASTNode::Call(c) => {
                 for arg in &c.args {
@@ -157,7 +155,7 @@ impl Vm {
                 }
 
                 self.compile_node(block, &c.callee);
-                block.push(ByteCode::Call(c.args.len()));
+                block.push(ByteCode::Call(c.args.len() as u32));
             },
             ASTNode::For(f) => {
                 let mut start_pc = 0;
@@ -168,7 +166,7 @@ impl Vm {
                         block.push(ByteCode::MakeIter);
                         block.push(ByteCode::Next);
                         start_pc = block.len() - 1;
-                        let i: usize = self.store_idt(ident.clone());
+                        let i = self.store_idt(ident.clone());
                         block.push(ByteCode::Store(i));
                         block.push(ByteCode::Load(i));
                         block.push(ByteCode::JumpIfFalse(0));
@@ -181,13 +179,13 @@ impl Vm {
                     self.compile_node(block, node);
                 }
 
-                block.push(ByteCode::Jump(start_pc));
-                block[false_jump_pc] = ByteCode::JumpIfFalse(block.len());
+                block.push(ByteCode::Jump(start_pc as u32));
+                block[false_jump_pc] = ByteCode::JumpIfFalse(block.len() as u32);
             },
             ASTNode::ObjIns(obj) => {
                 // block.push(ByteCode::LoadConst(self.store_const(Value::Str(obj.name.clone()))));
                 for prop in &obj.props {
-                    let c: usize = self.store_const(Value::Str(prop.name.clone()));
+                    let c = self.store_const(Value::Str(prop.name.clone()));
                     block.push(ByteCode::LoadConst(c));
                     self.compile_node(block, &prop.value);
                 }
@@ -196,7 +194,7 @@ impl Vm {
                 } else {
                     block.push(ByteCode::LoadConst(self.store_const(Value::None)));
                 }
-                block.push(ByteCode::Obj(obj.props.len()));
+                block.push(ByteCode::Obj(obj.props.len() as u32));
             },
             _ => todo!("{:?}", node)
         }
@@ -204,7 +202,14 @@ impl Vm {
 
     pub fn cont(&mut self, stack_id: usize, value: Value) -> RunResult {
         let stack = self.callstacks.get_mut(stack_id).unwrap();
-        stack.push_value(value);
+        let val = match value {
+            Value::Int(i) => StackValue::Int(i),
+            Value::Float(f) => StackValue::Float(f),
+            Value::Str(s) => StackValue::Str(s),
+            Value::Bool(b) => StackValue::Bool(b),
+            _ => todo!("{:?}", value)
+        };
+        stack.push_value(val);
         self.run_stack(stack_id)
     }
 
@@ -233,11 +238,11 @@ impl Vm {
                 }
             };
 
-            while stack.pc() < self.code_blocks[curr_blk].len() {
+            while stack.pc() < self.code_blocks[curr_blk as usize].len() as u32 {
                 let pc = stack.pc();
                 stack.increment_pc();
 
-                let c = &self.code_blocks[curr_blk][pc];
+                let c = &self.code_blocks[curr_blk as usize][pc as usize];
 
                 if self.log > 0 {
                     print!("blk: {} pc: {}, code: {:?}", curr_blk, pc, c);
@@ -255,7 +260,7 @@ impl Vm {
                         },
                         ByteCode::JumpIfFalse(_) => print!(" {:?}", stack.peek_value()),
                         ByteCode::Next => print!(" {:?}", stack.peek_value()),
-                        ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i].clone()),
+                        ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i as usize].clone()),
                         ByteCode::Ret(_) => print!(" {:?}", stack.peek_value()),
                         _ => {}
                     }
@@ -265,12 +270,14 @@ impl Vm {
 
                 match c {
                     ByteCode::Load(i) => {
-                        let v = self.scope.lookup(stack.scope_id(), i);
-                        stack.push_value(v.clone());
+                        match self.scope.lookup(stack.scope_id(), i) {
+                            Some(v) => stack.push_value(StackValue::from(&*v)),
+                            None => stack.push_value(StackValue::Undef(*i))
+                        };
                     },
                     ByteCode::Store(i) => {
-                        let v = stack.pop_value().unwrap();
-                        self.scope.insert(stack.scope_id(), *i, v);
+                        let v = Value::from(stack.pop_value().unwrap());
+                        self.scope.store_named(stack.scope_id(), *i, v);
                     },
                     ByteCode::BinMul |
                     ByteCode::BinAdd |
@@ -279,40 +286,40 @@ impl Vm {
                         let tos = stack.pop_value().unwrap();
                         let tos1 = stack.pop_value().unwrap();
 
-                        let v: Value = match (tos1,tos) {
-                            (Value::Int(a), Value::Int(b)) => {
+                        let v = match (tos1,tos) {
+                            (StackValue::Int(a), StackValue::Int(b)) => {
                                 match c {
-                                    ByteCode::BinMul => Value::Int(a * b),
-                                    ByteCode::BinAdd => Value::Int(a + b),
-                                    ByteCode::BinMinus => Value::Int(a - b),
-                                    ByteCode::BinDivide => Value::Int(a / b),
+                                    ByteCode::BinMul => StackValue::Int(a * b),
+                                    ByteCode::BinAdd => StackValue::Int(a + b),
+                                    ByteCode::BinMinus => StackValue::Int(a - b),
+                                    ByteCode::BinDivide => StackValue::Int(a / b),
                                     _ => panic!("Invalid operation")
                                 }
                             },
-                            (Value::Float(a), Value::Float(b)) => {
+                            (StackValue::Float(a), StackValue::Float(b)) => {
                                 match c {
-                                    ByteCode::BinMul => Value::Float(a * b),
-                                    ByteCode::BinAdd => Value::Float(a + b),
-                                    ByteCode::BinMinus => Value::Float(a - b),
-                                    ByteCode::BinDivide => Value::Float(a / b),
+                                    ByteCode::BinMul => StackValue::Float(a * b),
+                                    ByteCode::BinAdd => StackValue::Float(a + b),
+                                    ByteCode::BinMinus => StackValue::Float(a - b),
+                                    ByteCode::BinDivide => StackValue::Float(a / b),
                                     _ => panic!("Invalid operation")
                                 }
                             },
-                            (Value::Float(a), Value::Int(b)) => {
+                            (StackValue::Float(a), StackValue::Int(b)) => {
                                 match c {
-                                    ByteCode::BinMul => Value::Float(a * b as f64),
-                                    ByteCode::BinAdd => Value::Float(a + b as f64),
-                                    ByteCode::BinMinus => Value::Float(a - b as f64),
-                                    ByteCode::BinDivide => Value::Float(a / b as f64),
+                                    ByteCode::BinMul => StackValue::Float(a * b as f64),
+                                    ByteCode::BinAdd => StackValue::Float(a + b as f64),
+                                    ByteCode::BinMinus => StackValue::Float(a - b as f64),
+                                    ByteCode::BinDivide => StackValue::Float(a / b as f64),
                                     _ => panic!("Invalid operation")
                                 }
                             },
-                            (Value::Int(a), Value::Float(b)) => {
+                            (StackValue::Int(a), StackValue::Float(b)) => {
                                 match c {
-                                    ByteCode::BinMul => Value::Float(a as f64 * b),
-                                    ByteCode::BinAdd => Value::Float(a as f64 + b),
-                                    ByteCode::BinMinus => Value::Float(a as f64 - b),
-                                    ByteCode::BinDivide => Value::Float(a as f64 / b),
+                                    ByteCode::BinMul => StackValue::Float(a as f64 * b),
+                                    ByteCode::BinAdd => StackValue::Float(a as f64 + b),
+                                    ByteCode::BinMinus => StackValue::Float(a as f64 - b),
+                                    ByteCode::BinDivide => StackValue::Float(a as f64 / b),
                                     _ => panic!("Invalid operation")
                                 }
                             },
@@ -321,22 +328,20 @@ impl Vm {
 
                         stack.push_value(v);
                     },
-                    ByteCode::Jump(indx) => {
-                        stack.set_pc(*indx);
-                    },
+                    ByteCode::Jump(indx) => stack.set_pc(*indx),
                     ByteCode::JumpIfFalse(inx) => {
                         let v = stack.pop_value().unwrap();
 
                         match v {
-                            Value::Bool(b) => {
+                            StackValue::Bool(b) => {
                                 if !b {
                                     stack.set_pc(*inx);
                                 }
                             },
-                            Value::None => {
+                            StackValue::None => {
                                 stack.set_pc(*inx);
                             },
-                            Value::Int(i) => {
+                            StackValue::Int(i) => {
                                 if i < 1 {
                                     stack.set_pc(*inx);
                                 } 
@@ -357,36 +362,40 @@ impl Vm {
                         let callee = stack.pop_value().unwrap();
 
                         match callee {
-                            Value::Fn(blk) => {
+                            StackValue::Fn(blk) => {
                                 let scope_id = self.scope.create_child_scope(stack.scope_id());
 
                                 stack.push(Call {
-                                    args: Value::Array(args),
                                     blk,
                                     scope_id,
                                     ..Default::default()
                                 });
 
                                 curr_blk = blk;
-
-                                // match r {
-                                //     RunResult::Value(v) => match v {
-                                //         Value::None => {},
-                                //         _ => stack.push_value(v)
-                                //     },
-                                //     RunResult::Await {
-                                //         value: v,
-                                //     } => return RunResult::Await {
-                                //         value: v
-                                //     },
-                                //     RunResult::None => {}
-                                // }
                             },
-                            Value::UndefIdent(idt) => {
-                                stack.push_value(Value::UndefCall {
-                                    ident: idt,
-                                    args: args
-                                })
+                            _ => {}
+                        }
+
+
+                        match callee {
+                            StackValue::Fn(blk) => {
+                                stack.push(Call {
+                                    blk,
+                                    scope_id: stack.scope_id(),
+                                    ..Default::default()
+                                });
+                            },
+                            StackValue::Undef(i) => {
+                                let mut args = vec![];
+                                for _ in 0..*arg_count {
+                                    let v = stack.pop_value().unwrap();
+                                    args.push(v);
+                                }
+                                args.reverse();
+                                stack.push_value(StackValue::UndefCall {
+                                    ident: i,
+                                    args
+                                });
                             },
                             _ => panic!("invalid callee {:?}", callee)
                         }
@@ -396,12 +405,12 @@ impl Vm {
                         let tos1 = stack.pop_value().unwrap();
                         
                         let v = match (tos, tos1) {
-                            (Value::Int(a), Value::Int(b)) => Value::Bool(a == b),
-                            (Value::Float(a), Value::Float(b)) => Value::Bool(a == b),
-                            (Value::Float(a), Value::Int(b)) => Value::Bool(a == b as f64),
-                            (Value::Int(a), Value::Float(b)) => Value::Bool(a as f64 == b),
-                            (Value::Bool(a), Value::Bool(b)) => Value::Bool(a == b),
-                            (Value::Str(a), Value::Str(b)) => Value::Bool(a == b),
+                            (StackValue::Int(a), StackValue::Int(b)) => StackValue::Bool(a == b),
+                            (StackValue::Float(a), StackValue::Float(b)) => StackValue::Bool(a == b),
+                            (StackValue::Float(a), StackValue::Int(b)) => StackValue::Bool(a == b as f64),
+                            (StackValue::Int(a), StackValue::Float(b)) => StackValue::Bool(a as f64 == b),
+                            (StackValue::Bool(a), StackValue::Bool(b)) => StackValue::Bool(a == b),
+                            (StackValue::Str(a), StackValue::Str(b)) => StackValue::Bool(a == b),
                             _ => panic!("Invalid operation")
                         };
 
@@ -416,73 +425,110 @@ impl Vm {
                         stack.set_scope_id(parent_scope);
                     },
                     ByteCode::LoadConst(a) => {
-                        let v = self.constants[*a].clone();
+                        let v = self.constants[*a as usize].clone();
+                        let v = match v {
+                            Value::Int(i) => StackValue::Int(i),
+                            Value::Float(f) => StackValue::Float(f),
+                            Value::Str(s) => StackValue::Str(s),
+                            Value::Bool(b) => StackValue::Bool(b),
+                            _ => todo!("{:?}", v)
+                        };
                         stack.push_value(v);
                     },
-                    ByteCode::StoreName => todo!(),
-                    ByteCode::BinOP => todo!(),
                     ByteCode::MakeStruct => todo!(),
                     ByteCode::MakeArray(len) => {
                         let mut items = vec![];
-
                         for _ in 0..*len {
-                            let v = stack.pop_value().unwrap();
+                            let v = Value::from(stack.pop_value().unwrap());
                             items.push(v);
                         }
-
                         items.reverse();
-
-                        stack.push_value(Value::Array(items));
+                        let id = self.scope.store_unamed(Value::List(items));
+                        stack.push_value(StackValue::Ref(id));
                     },
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(c) => {
                         return match stack.pop_value() {
-                            Some(v) => RunResult::Value(v),
+                            Some(v) => RunResult::Value {
+                                scope_id: stack.scope_id(),
+                                value: Value::from(v)
+                            },
                             None => RunResult::None
                         };
                     },
-                    ByteCode::Fun(i) => {
-                        stack.push_value(Value::Fn(*i));
-                    },
+                    ByteCode::Fun(i) => stack.push_value(StackValue::Fn(*i)),
                     ByteCode::Next => {
-                        let val = stack.peek_mut_value().unwrap();
+                        let val = stack.peek_value().unwrap();
+                        match val {
+                            StackValue::Ref(r) => {
+                                let val = match self.scope.lookup(stack.scope_id(), &(*r as u32)) {
+                                    Some(v) => v,
+                                    None => todo!()
+                                };
 
-                        let v = match val {
-                            Value::ArrayIter {
-                                inx,
-                                arr
-                            } => {
-                                match arr.get(*inx) {
-                                    Some(v) => {
-                                        *inx += 1;
-                                        v.clone()
+                                let (id, inx) = match val {
+                                    Value::ListIter { inx, id } => (*id, *inx),
+                                    _ => todo!("{:?}", val)
+                                };
+
+                                let val = match self.scope.lookup(stack.scope_id(), &id) {
+                                    Some(v) => v,
+                                    None => todo!()
+                                };
+
+                                let val = match val {
+                                    Value::List(arr) => {
+                                        arr.get(inx as usize).unwrap()
                                     },
-                                    None => {
-                                        stack.pop_value();
-                                        Value::None
-                                    }
-                                }
+                                    _ => todo!("{:?}", val)
+                                };
+
+                                let val = StackValue::from(val);
+                                stack.push_value(val);
                             },
                             _ => todo!("{:?}", val)
-                        };
-
-                        stack.push_value(v);
+                        }
                     },
                     ByteCode::MakeIter => {
-                        let val: Value = stack.pop_value().unwrap();
+                        let val = stack.pop_value().unwrap();
 
                         match val {
-                            Value::Array(arr) => {
-                                stack.push_value(Value::ArrayIter {
-                                    inx: 0,
-                                    arr: arr
-                                });
+                            StackValue::Ref(r) => {
+                                let val = match self.scope.lookup(stack.scope_id(), &r) {
+                                    Some(v) => v,
+                                    None => todo!()
+                                };
+
+                                match val {
+                                    Value::List(arr) => {
+                                        let it_id = self.scope.store_unamed(Value::ListIter {
+                                            inx: 0,
+                                            id: r
+                                        });
+                                        stack.push_value(StackValue::Ref(it_id));
+                                    },
+                                    _ => todo!("{:?}", val)
+                                };
                             },
                             _ => todo!("{:?}", val)
                         }
                     },
                     ByteCode::Await => {
                         let val = stack.pop_value().unwrap();
+                        let val = match val {
+                            StackValue::Int(i) => Value::Int(i),
+                            StackValue::Float(f) => Value::Float(f),
+                            StackValue::Str(s) => Value::Str(s),
+                            StackValue::Bool(b) => Value::Bool(b),
+                            StackValue::Undef(i) => Value::UndefIdent(i),
+                            StackValue::UndefCall { ident, args } => {
+                                Value::UndefCall {
+                                    ident,
+                                    args: vec![]
+                                }
+                            },
+                            _ => todo!("{:?}", val)
+                        };
 
                         return RunResult::Await {
                             stack_id,
@@ -492,7 +538,7 @@ impl Vm {
                     ByteCode::Obj(arg_count) => {
                         let name = match stack.pop_value() {
                             Some(v) => match v {
-                                Value::Str(s) => Some(s),
+                                StackValue::Str(s) => Some(s),
                                 _ => todo!("{:?}", v)
                             },
                             None => None
@@ -508,8 +554,16 @@ impl Vm {
                             let k = stack.pop_value().unwrap();
 
                             let key = match k {
-                                Value::Str(s) => s,
+                                StackValue::Str(s) => s,
                                 _ => todo!("{:?}", k)
+                            };
+
+                            let v = match v {
+                                StackValue::Int(i) => Value::Int(i),
+                                StackValue::Float(f) => Value::Float(f),
+                                StackValue::Str(s) => Value::Str(s),
+                                StackValue::Bool(b) => Value::Bool(b),
+                                _ => todo!("{:?}", v)
                             };
 
                             obj.props.push(
@@ -520,7 +574,8 @@ impl Vm {
                             );
                         }
 
-                        stack.push_value(Value::Obj(obj));
+                        let id = self.scope.store_unamed(Value::Obj(obj));
+                        stack.push_value(StackValue::Ref(id));
                     },
                     _ => todo!("{:?}", c)
                 };
@@ -550,7 +605,7 @@ impl Vm {
         self.run_blk(blk, Value::None)
     }
 
-    pub fn run_blk(&mut self, blk: usize, args: Value) -> RunResult {
+    pub fn run_blk(&mut self, blk: u32, args: Value) -> RunResult {
         if self.log > 0 {
             println!("run_blk blk: {} args: {:?}", blk, args);
         }
@@ -561,7 +616,6 @@ impl Vm {
         stack.log = self.log;
         stack.push(Call {
             blk: blk,
-            args: args,
             scope_id,
             ..Default::default()
         });
@@ -574,13 +628,12 @@ impl Vm {
         self.run_stack(self.callstacks.len() - 1)
     }
 
-    pub fn store_const(&mut self, v: Value) -> usize {
+    pub fn store_const(&mut self, v: Value) -> u32 {
         self.constants.push(v);
-
-        self.constants.len() - 1
+        (self.constants.len() - 1) as u32
     }
 
-    pub fn store_idt(&mut self, name: String) -> usize {
+    pub fn store_idt(&mut self, name: String) -> u32 {
         match self.idt_map.get(&name) {
             Some(i) => *i,
             None => {
@@ -591,6 +644,10 @@ impl Vm {
                 i
             }
         }
+    }
+
+    pub fn get_val(&mut self, scope_id: u32, id: u32) -> Option<&mut Value> {
+        self.scope.lookup(scope_id, &id)
     }
 }
 
@@ -603,50 +660,48 @@ mod tests {
     #[test]
     fn test_return_number() {
         let mut vm = Vm::new();
-        vm.log = 1;
         let res = vm.run_code("return 1");
-        assert_eq!(res, RunResult::Value(Value::Int(1)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
     }
 
     #[test]
     fn simple_plus() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 + 1");
-        assert_eq!(res, RunResult::Value(Value::Int(2)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(2), scope_id: 0});
     }
 
     #[test]
     fn simple_sub() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 - 1");
-        assert_eq!(res, RunResult::Value(Value::Int(0)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(0), scope_id: 0});
     }
 
     #[test]
     fn add_sub() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 + 1 - 1");
-        assert_eq!(res, RunResult::Value(Value::Int(1)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0});
     }
 
     #[test]
     fn simple_comparsion() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 == 1");
-        assert_eq!(res, RunResult::Value(Value::Bool(true)));
+        assert_eq!(res, RunResult::Value { value: Value::Bool(true), scope_id: 0});
     }
 
     #[test]
     fn simple_if_true() {
         let mut vm = Vm::new();
         let res = vm.run_code("if true { return 1 }");
-        assert_eq!(res, RunResult::Value(Value::Int(1)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
     }
 
     #[test]
     fn simple_if_false() {
         let mut vm = Vm::new();
-        vm.log = 1;
         let res = vm.run_code("if false { return 1 }");
         assert_eq!(res, RunResult::None);
     }
@@ -658,18 +713,31 @@ mod tests {
         a = 1
         return a
         "#);
-        assert_eq!(res, RunResult::Value(Value::Int(1)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
     }
 
     #[test]
     fn simple_array() {
         let mut vm = Vm::new();
         let res = vm.run_code("return [1,2,3]");
-        assert_eq!(res, RunResult::Value(Value::Array(vec![
-            Value::Int(1),
-            Value::Int(2),
-            Value::Int(3),
-        ])));
+
+        match res {
+            RunResult::Value { value, .. } => {
+                let arr = match value {
+                    Value::Ptr(p) => match vm.get_val(0, p) {
+                        Some(Value::List(arr)) => arr,
+                        _ => panic!("Invalid result")
+                    },
+                    _ => panic!("Invalid result")
+                };
+                assert_eq!(arr, &mut vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                    Value::Int(3)
+                ]);
+            },
+            _ => panic!("Invalid result")
+        }
     }
 
     #[test]
@@ -681,7 +749,7 @@ mod tests {
         return a()
         "#);
         println!("{:?}", vm.code_blocks);
-        assert_eq!(res, RunResult::Value(Value::Int(1)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
     }
 
     #[test]
@@ -694,12 +762,13 @@ mod tests {
         }
         return state
         "#);
-        assert_eq!(res, RunResult::Value(Value::Int(-6)));
+        assert_eq!(res, RunResult::Value { value: Value::Int(-6), scope_id: 0 });
     }
 
     #[test]
     fn await_fun() {
         let mut vm = Vm::new();
+        vm.log = 1;
         let res = vm.run_code("await(test())");
 
         assert_eq!(res, RunResult::Await {
@@ -719,7 +788,7 @@ mod tests {
         match res {
             RunResult::Await { stack_id, value } => {
                 let res = vm.cont(stack_id, Value::Int(1));
-                assert_eq!(res, RunResult::Value(Value::Int(1)));
+                assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
             },
             _ => panic!("Invalid result")
         }
@@ -731,16 +800,26 @@ mod tests {
         vm.log = 1;
         let res = vm.run_code(r#"return H1 { text: "lol" }"#);
 
-        assert_eq!(res, RunResult::Value(Value::Obj(
-            Obj {
-                name: Some("H1".to_string()),
-                props: vec![
-                    ObjProp {
-                        name: "text".to_string(),
-                        value: Value::Str("lol".to_string())
-                    }
-                ]
-            }
-        )));
+        match res {
+            RunResult::Value { value, .. } => {
+                let obj = match value {
+                    Value::Ptr(p) => match vm.get_val(0, p) {
+                        Some(Value::Obj(obj)) => obj,
+                        _ => panic!("Invalid result")
+                    },
+                    _ => panic!("Invalid result")
+                };
+                assert_eq!(obj, &mut Obj {
+                    name: Some("H1".to_string()),
+                    props: vec![
+                        ObjProp {
+                            name: "text".to_string(),
+                            value: Value::Str("lol".to_string())
+                        }
+                    ]
+                });
+            },
+            _ => panic!("Invalid result")
+        }
     }
 }

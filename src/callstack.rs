@@ -1,25 +1,23 @@
-use crate::Value;
-
+use crate::StackValue;
 
 #[derive(Debug, Default)]
 pub struct Call {
-    pub blk: usize,
-    pub pc: usize,
-    pub scope_id: usize,
-    pub args: Value,
-    pub values: Vec<Value>,
+    pub blk: u32,
+    pub pc: u32,
+    pub scope_id: u32,
+    pub values: Vec<StackValue>,
 }
 
 impl Call {
-    pub fn push(&mut self, val: Value) {
+    pub fn push(&mut self, val: StackValue) {
         self.values.push(val);
     }
 
-    pub fn pop(&mut self) -> Option<Value> {
+    pub fn pop(&mut self) -> Option<StackValue> {
         self.values.pop()
     }
 
-    pub fn peek(&self) -> Option<&Value> {
+    pub fn peek(&self) -> Option<&StackValue> {
         self.values.last()
     }
 }
@@ -38,19 +36,19 @@ impl Callstack {
         }
     }
 
-    pub fn push_value(&mut self, val: Value) {
+    pub fn push_value(&mut self, val: StackValue) {
         self.stack.last_mut().unwrap().push(val);
     }
  
-    pub fn pop_value(&mut self) -> Option<Value> {
+    pub fn pop_value(&mut self) -> Option<StackValue> {
         self.stack.last_mut().unwrap().pop()
     }
 
-    pub fn peek_value(&self) -> Option<&Value> {
+    pub fn peek_value(&self) -> Option<&StackValue> {
         self.stack.last().unwrap().peek()
     }
 
-    pub fn peek_mut_value(&mut self) -> Option<&mut Value> {
+    pub fn peek_mut_value(&mut self) -> Option<&mut StackValue> {
         self.stack.last_mut().unwrap().values.last_mut()
     }
 
@@ -70,18 +68,18 @@ impl Callstack {
         self.stack.pop();
     }
 
-    pub fn pc(&self) -> usize {
+    pub fn pc(&self) -> u32 {
         self.stack.last().unwrap().pc
     }
 
-    pub fn blk(&self) -> Option<usize> {
+    pub fn blk(&self) -> Option<u32> {
         match self.stack.last() {
             Some(call) => Some(call.blk),
             None => None,
         }
     }
 
-    pub fn scope_id(&self) -> usize {
+    pub fn scope_id(&self) -> u32 {
         self.stack.last().unwrap().scope_id
     }
 
@@ -89,11 +87,11 @@ impl Callstack {
         self.stack.last_mut().unwrap().pc += 1;
     }
 
-    pub fn set_pc(&mut self, pc: usize) {
+    pub fn set_pc(&mut self, pc: u32) {
         self.stack.last_mut().unwrap().pc = pc;
     }
 
-    pub fn set_scope_id(&mut self, scope_id: usize) {
+    pub fn set_scope_id(&mut self, scope_id: u32) {
         self.stack.last_mut().unwrap().scope_id = scope_id;
     }
 }

@@ -1,5 +1,43 @@
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum StackValue {
+	Int(i64),
+	Float(f64),
+	Str(String),
+	Bool(bool),
+	Ref(u32),
+	Undef(u32),
+	Fn(u32),
+	UndefCall {
+		ident: u32,
+		args: Vec<StackValue>
+	},
+	None,
+}
+
+impl Default for StackValue {
+	fn default() -> Self {
+		Self::None
+	}
+}
+
+impl From<&Value> for StackValue {
+	fn from(val: &Value) -> Self {
+		match val {
+			Value::Int(i) => Self::Int(*i),
+			Value::Float(f) => Self::Float(*f),
+			Value::Str(s) => Self::Str(s.clone()),
+			Value::Bool(b) => Self::Bool(*b),
+			Value::Ptr(r) => Self::Ref(*r),
+			Value::UndefIdent(u) => Self::Undef(*u),
+			Value::Fn(f) => Self::Fn(*f),
+			Value::None => Self::None,
+			_ => panic!("Cannot convert value to stack value")
+		}
+	}
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct ObjProp {
 	pub name: String,
 	pub value: Value
@@ -17,17 +55,17 @@ pub enum Value {
     Float(f64),
     Str(String),
     Bool(bool),
-    Array(Vec<Value>),
-	Ptr(usize),
-	Fn(usize),
+    List(Vec<Value>),
+	Ptr(u32),
+	Fn(u32),
 	Obj(Obj),
-	ArrayIter {
-		inx: usize,
-		arr: Vec<Value>
+	ListIter {
+		inx: u32,
+		id: u32
 	},
-	UndefIdent(usize),
+	UndefIdent(u32),
 	UndefCall {
-		ident: usize,
+		ident: u32,
 		args: Vec<Value>
 	},
     None,
@@ -36,6 +74,22 @@ pub enum Value {
 impl Default for Value {
 	fn default() -> Self {
 		Self::None
+	}
+}
+
+impl From<StackValue> for Value {
+	fn from(val: StackValue) -> Self {
+		match val {
+			StackValue::Int(i) => Self::Int(i),
+			StackValue::Float(f) => Self::Float(f),
+			StackValue::Str(s) => Self::Str(s),
+			StackValue::Bool(b) => Self::Bool(b),
+			StackValue::Ref(r) => Self::Ptr(r),
+			StackValue::Undef(u) => Self::UndefIdent(u),
+			StackValue::Fn(f) => Self::Fn(f),
+			StackValue::None => Self::None,
+			_ => todo!("{:?}", val)
+		}
 	}
 }
 
@@ -181,7 +235,10 @@ pub enum ASTNode {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RunResult {
-	Value(Value),
+	Value {
+		value: Value,
+		scope_id: u32,
+	},
 	Await {
 		stack_id: usize,
 		value: Value,
