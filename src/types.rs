@@ -12,6 +12,10 @@ pub enum StackValue {
 		ident: u32,
 		args: Vec<StackValue>
 	},
+	PropAccess {
+		obj: u32,
+		prop: u32
+	},
 	None,
 }
 
@@ -146,8 +150,13 @@ pub struct StructDef {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Param {
+	pub name: String
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct Fun {
-	pub params: Vec<ASTNode>,
+	pub params: Vec<Param>,
 	pub body: Vec<ASTNode>,
 }
 

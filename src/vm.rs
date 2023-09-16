@@ -133,6 +133,10 @@ impl Vm {
             },
             ASTNode::Fun(f) => {
                 let mut fun_block = Vec::new();
+                for param in &f.params {
+                    let i = self.store_idt(param.name.clone());
+                    fun_block.push(ByteCode::Store(i));
+                }
                 for node in &f.body {
                     self.compile_node(&mut fun_block, node);
                 }
@@ -196,6 +200,11 @@ impl Vm {
                 }
                 block.push(ByteCode::Obj(obj.props.len() as u32));
             },
+            ASTNode::ProbAccess(a) => {
+                self.compile_node(block, &a.object);
+                let i = self.store_idt(a.property.clone());
+                block.push(ByteCode::AccessProp(i));
+            },
             _ => todo!("{:?}", node)
         }
     }
@@ -237,6 +246,10 @@ impl Vm {
                     return RunResult::None;
                 }
             };
+
+            if self.log > 1 {
+                println!("stack: {:?}", stack);
+            }
 
             while stack.pc() < self.code_blocks[curr_blk as usize].len() as u32 {
                 let pc = stack.pc();
@@ -350,6 +363,12 @@ impl Vm {
                         }
                     },
                     ByteCode::Call(arg_count) => {
+                        if self.log > 1 {
+                            println!("{:?}", stack);
+                        }
+
+                        let callee = stack.pop_value().unwrap();
+
                         let mut args = Vec::new();
 
                         for _ in 0..*arg_count {
@@ -359,7 +378,9 @@ impl Vm {
 
                         args.reverse();
 
-                        let callee = stack.pop_value().unwrap();
+                        if self.log > 1 {
+                            println!("args: {:?}", args);
+                        }
 
                         match callee {
                             StackValue::Fn(blk) => {
@@ -368,22 +389,11 @@ impl Vm {
                                 stack.push(Call {
                                     blk,
                                     scope_id,
-                                    ..Default::default()
+                                    values: args,
+                                    pc: 0
                                 });
 
                                 curr_blk = blk;
-                            },
-                            _ => {}
-                        }
-
-
-                        match callee {
-                            StackValue::Fn(blk) => {
-                                stack.push(Call {
-                                    blk,
-                                    scope_id: stack.scope_id(),
-                                    ..Default::default()
-                                });
                             },
                             StackValue::Undef(i) => {
                                 let mut args = vec![];
@@ -397,7 +407,27 @@ impl Vm {
                                     args
                                 });
                             },
-                            _ => panic!("invalid callee {:?}", callee)
+                            StackValue::PropAccess { obj, prop } => {
+                                let val = match self.scope.lookup(stack.scope_id(), &obj) {
+                                    Some(v) => v,
+                                    None => todo!()
+                                };
+
+                                match val {
+                                    Value::List(l) => {
+                                        for arg in args {
+                                            match arg {
+                                                StackValue::Int(i) => {
+                                                    l.push(Value::Int(i));
+                                                },
+                                                _ => todo!("{:?}", arg)
+                                            }
+                                        }
+                                    },
+                                    _ => todo!("{:?}", val)
+                                };
+                            },
+                            _ => todo!("invalid callee {:?}", callee)
                         }
                     },
                     ByteCode::Cmp => {
@@ -540,7 +570,7 @@ impl Vm {
                             Some(v) => match v {
                                 StackValue::Str(s) => Some(s),
                                 _ => todo!("{:?}", v)
-                            },
+                            }, 
                             None => None
                         };
                         
@@ -576,6 +606,15 @@ impl Vm {
 
                         let id = self.scope.store_unamed(Value::Obj(obj));
                         stack.push_value(StackValue::Ref(id));
+                    },
+                    ByteCode::AccessProp(a) => {
+                        let val = stack.pop_value().unwrap();
+                        match val {
+                            StackValue::Ref(r) => {
+                                stack.push_value(StackValue::PropAccess { obj: r, prop: *a });
+                            },
+                            _ => todo!("{:?}", val)
+                        };
                     },
                     _ => todo!("{:?}", c)
                 };
@@ -753,6 +792,18 @@ mod tests {
     }
 
     #[test]
+    fn function_call_with_args() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+        let res = vm.run_code(r#"
+        a = (a) => return a
+        return a(1)
+        "#);
+        println!("{:?}", vm.code_blocks);
+        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
+    }
+
+    #[test]
     fn simple_for() {
         let mut vm = Vm::new();
         let res = vm.run_code(r#"
@@ -797,7 +848,6 @@ mod tests {
     #[test]
     fn return_obj_instance() {
         let mut vm = Vm::new();
-        vm.log = 1;
         let res = vm.run_code(r#"return H1 { text: "lol" }"#);
 
         match res {
@@ -818,6 +868,36 @@ mod tests {
                         }
                     ]
                 });
+            },
+            _ => panic!("Invalid result")
+        }
+    }
+
+    #[test]
+    fn push_to_list() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+        let res = vm.run_code(r#"
+        a = [1,2,3]
+        a.push(4)
+        return a
+        "#);
+
+        match res {
+            RunResult::Value { value, .. } => {
+                let arr = match value {
+                    Value::Ptr(p) => match vm.get_val(0, p) {
+                        Some(Value::List(arr)) => arr,
+                        _ => panic!("Invalid result")
+                    },
+                    _ => panic!("Invalid result")
+                };
+                assert_eq!(arr, &mut vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                    Value::Int(3),
+                    Value::Int(4)
+                ]);
             },
             _ => panic!("Invalid result")
         }

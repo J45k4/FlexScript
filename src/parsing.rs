@@ -5,6 +5,7 @@ use logos::skip;
 use crate::For;
 use crate::ForCond;
 use crate::If;
+use crate::Param;
 use crate::types::ASTNode;
 use crate::types::Array;
 use crate::types::Assign;
@@ -561,7 +562,7 @@ impl Parser {
 						},
 						Token::Ident(name) => {
 							self.skip(1);
-							params.push(ASTNode::Ident(name));
+							params.push(Param { name: name });
 						},
 						_ => panic!("Expected ident or ) but got {:?}", self.peek(0)),
 					}
@@ -570,7 +571,7 @@ impl Parser {
 			}
 			Token::Ident(idt) => {
 				self.skip(1);
-				params.push(ASTNode::Ident(idt));
+				params.push(Param { name: idt });
 			}
 			_ => {
 				println!("{}", self.curr_loc());
@@ -922,6 +923,7 @@ mod tests {
     use crate::For;
     use crate::ForCond;
     use crate::If;
+    use crate::Param;
 
     use super::*;
 
@@ -1458,8 +1460,8 @@ mod tests {
 						ASTNode::Fun(
 							Fun {
 								params: vec![
-									ASTNode::Ident("a".to_string()),
-									ASTNode::Ident("b".to_string()),
+									Param { name: "a".to_string() },
+									Param { name: "b".to_string() }
 								],
 								body: vec![
 									ASTNode::BinOp(
@@ -1534,7 +1536,7 @@ mod tests {
 						ASTNode::Fun(
 							Fun {
 								params: vec![
-									ASTNode::Ident("a".to_string()),
+									Param { name: "a".to_string() }
 								],
 								body: vec![
 									ASTNode::BinOp(
@@ -1572,7 +1574,7 @@ mod tests {
 						ASTNode::Fun(
 							Fun {
 								params: vec![
-									ASTNode::Ident("a".to_string()),
+									Param { name: "a".to_string() }
 								],
 								body: vec![
 									ASTNode::BinOp(

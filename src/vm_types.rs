@@ -25,7 +25,8 @@ pub enum ByteCode {
     Var(u32),
     Next,
     MakeIter,
-    Await
+    Await,
+    AccessProp(u32),
 }
 
 pub struct Ins {
