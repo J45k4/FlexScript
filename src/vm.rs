@@ -14,6 +14,11 @@ use crate::callstack::Callstack;
 use crate::scope::ScopeManager;
 use crate::vm_types::ByteCode;
 
+const PUSH_METHOD: u32 = 1;
+const POP_METHOD: u32 = 2;
+const MAP_METHOD: u32 = 3;
+const FIRST_IDT: u32 = 30;
+
 fn print_stack_top(scope: &mut ScopeManager, stack: &Callstack) {
     let v = match stack.peek_value() {
         Some(v) => v.clone(),
@@ -63,7 +68,7 @@ impl Vm {
             scope: ScopeManager::new(),
             idt_map: HashMap::new(),
             id_idt_map: HashMap::new(),
-            next_idt: 0,
+            next_idt: FIRST_IDT,
             log: 0
         }
     }
@@ -319,6 +324,7 @@ impl Vm {
                         ByteCode::Next => print_stack_top(&mut self.scope, stack),
                         ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i as usize].clone()),
                         ByteCode::Ret(_) => print_stack_top(&mut self.scope, stack),
+                        ByteCode::Call(_) => print_stack_top(&mut self.scope, stack),
                         _ => {}
                     }
 
@@ -474,8 +480,44 @@ impl Vm {
 
                                 match val {
                                     Value::List(l) => {
-                                        for arg in args {
-                                            l.push(Value::from(arg));
+                                        match prop {
+                                            PUSH_METHOD => {
+                                                for arg in args {
+                                                    l.push(Value::from(arg));
+                                                }
+                                            },
+                                            POP_METHOD => {
+                                                let v = l.pop().unwrap();
+                                                stack.push_value(StackValue::from(&v));
+                                            },
+                                            MAP_METHOD => {
+                                                todo!()
+                                                // let mut new_arr = vec![];
+                                                // for item in l {
+                                                //     let mut stack = Callstack::new();
+                                                //     stack.push_value(StackValue::from(&item));
+                                                //     let res = self.run_stack(stack_id);
+                                                //     match res {
+                                                //         RunResult::Value { scope_id, value } => {
+                                                //             new_arr.push(value);
+                                                //         },
+                                                //         _ => todo!()
+                                                //     }
+                                                // }
+                                                // let id = self.scope.store_unamed(Value::List(new_arr));
+                                                // stack.push_value(StackValue::Ref(id));
+                                            },
+                                            _ => todo!()
+                                        }
+
+                                        if prop == PUSH_METHOD {
+                                            for arg in args {
+                                                l.push(Value::from(arg));
+                                            }
+                                        }
+
+                                        if prop == MAP_METHOD {
+
                                         }
                                     },
                                     _ => todo!("{:?}", val)
@@ -743,6 +785,12 @@ impl Vm {
     }
 
     pub fn store_idt(&mut self, name: String) -> u32 {
+        match name.as_str() {
+            "push" => return PUSH_METHOD,
+            "map" => return MAP_METHOD,
+            _ => {}
+        };
+
         match self.idt_map.get(&name) {
             Some(i) => *i,
             None => {
@@ -890,7 +938,7 @@ mod tests {
         assert_eq!(res, RunResult::Await {
             stack_id: 0,
             value: Value::UndefCall { 
-                ident: 0, 
+                ident: 30, 
                 args: vec![] 
             }
         });
@@ -941,6 +989,7 @@ mod tests {
     #[test]
     fn push_to_list() {
         let mut vm = Vm::new();
+        vm.log = 1;
         let res = vm.run_code(r#"
         a = [1,2,3]
         a.push(4)
@@ -961,6 +1010,33 @@ mod tests {
                     Value::Int(2),
                     Value::Int(3),
                     Value::Int(4)
+                ]);
+            },
+            _ => panic!("Invalid result")
+        }
+    }
+
+    #[test]
+    fn map_list() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+        let res = vm.run_code(r#"return [1,2,3,4].map(p => return p * 2)"#);
+        println!("{:?}", res);
+        println!("{:?}", vm.code_blocks);
+        match res {
+            RunResult::Value { value, .. } => {
+                let arr = match value {
+                    Value::Ptr(p) => match vm.get_val(0, p) {
+                        Some(Value::List(arr)) => arr,
+                        _ => panic!("Invalid result")
+                    },
+                    _ => panic!("Invalid result")
+                };
+                assert_eq!(arr, &mut vec![
+                    Value::Int(2),
+                    Value::Int(4),
+                    Value::Int(6),
+                    Value::Int(8)
                 ]);
             },
             _ => panic!("Invalid result")
