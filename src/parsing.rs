@@ -277,6 +277,10 @@ impl Parser {
 	}
 
 	fn parse_array(&mut self) -> ASTNode {
+		if self.loglevel > 0 {
+			self.callstack.push("parse_item".to_string());
+		}
+
 		self.skip(1);
 		let mut items = Vec::new();
 
@@ -295,7 +299,12 @@ impl Parser {
 			}
 		}
 
-		ASTNode::Array(Array { items })
+		let left = ASTNode::Array(Array { items });
+
+		match self.peek(0) {
+			Some(Token::Dot) => self.parse_prob_access(left),
+			_ => left
+		}
 	}
 
 	fn parse_item(&mut self) -> Option<ASTNode> {
@@ -704,12 +713,8 @@ impl Parser {
 					}
 				)
 			},
-			Token::OpenParen => {
-				self.parse_call(left)
-			},
-			Token::Dot => {
-				self.parse_prob_access(left)
-			},
+			Token::OpenParen => self.parse_call(left),
+			Token::Dot => self.parse_prob_access(left),
 			Token::Eq => {
 				self.skip(1);
 				ASTNode::BinOp(
@@ -899,8 +904,7 @@ impl Parser {
 			Token::True => ASTNode::Lit(Value::Bool(true)),
 			Token::False => ASTNode::Lit(Value::Bool(false)),
 			Token::OpenParen => {
-				let node = self.parse_expr();
-				
+				let node = self.parse_expr();	
 				self.expect_eat(Token::CloseParen);
 				return node;
 			},
@@ -1912,6 +1916,7 @@ mod tests {
 		"#;
 
 		let ast = Parser::new(code)
+			.set_loglevel(1)
 			.parse();
 
 		let expected = vec![
@@ -1957,6 +1962,32 @@ mod tests {
 				}
 			)
 		];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn list_map() {
+		let code = "[1].map(p => p * 2)";
+		let ast = Parser::new(code).set_loglevel(1).parse();
+		let expected = vec![ASTNode::Call(Call {
+			callee: Box::new(ASTNode::ProbAccess(ProbAccess {
+				object: Box::new(ASTNode::Array(Array {
+					items: vec![ASTNode::Lit(Value::Int(1))],
+				})),
+				property: "map".to_string(),
+			})),
+			args: vec![ASTNode::Fun(Fun {
+				params: vec![Param {
+					name: "p".to_string(),
+				}],
+				body: vec![ASTNode::BinOp(BinOp {
+					op: Op::Mul,
+					left: Box::new(ASTNode::Ident("p".to_string())),
+					right: Box::new(ASTNode::Lit(Value::Int(2))),
+				})],
+			})],
+		})];
 
 		assert_eq!(ast, expected);
 	}
