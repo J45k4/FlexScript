@@ -53,18 +53,10 @@ impl Callstack {
     }
 
     pub fn push(&mut self, call: Call) {
-        if self.log > 0 {
-            println!("Push: {:?}", call);
-        }
-
         self.stack.push(call);
     }
 
     pub fn pop(&mut self) {
-        if self.log > 0 {
-            println!("Pop: {:?}", self.stack.last().unwrap());
-        }
-
         self.stack.pop();
     }
 

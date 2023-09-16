@@ -14,6 +14,33 @@ use crate::callstack::Callstack;
 use crate::scope::ScopeManager;
 use crate::vm_types::ByteCode;
 
+fn print_stack_top(scope: &mut ScopeManager, stack: &Callstack) {
+    let v = match stack.peek_value() {
+        Some(v) => v.clone(),
+        None => StackValue::None
+    };
+
+    match v {
+        StackValue::Ref(r) => {
+            let val = match scope.lookup(stack.scope_id(), &r) {
+                Some(v) => v.clone(),
+                None => Value::None
+            };
+
+            print!(" {:?}", val);
+        },
+        _ => print!(" {:?}", v)
+    }
+}
+
+fn format_num(digits: u32, num: u32) -> String {
+    let mut s = num.to_string();
+    while s.len() < digits as usize {
+        s = format!("0{}", s);
+    }
+    s
+}
+
 pub struct Vm {
     scopes: Vec<usize>,
     constants: Vec<Value>,
@@ -209,6 +236,25 @@ impl Vm {
         }
     }
 
+    fn print_stack_top(&mut self, stack: &Callstack) {
+        let v = match stack.peek_value() {
+            Some(v) => v.clone(),
+            None => StackValue::None
+        };
+
+        match v {
+            StackValue::Ref(r) => {
+                let val = match self.scope.lookup(stack.scope_id(), &r) {
+                    Some(v) => v.clone(),
+                    None => Value::None
+                };
+
+                print!(" {:?}", val);
+            },
+            _ => print!(" {:?}", v)
+        }
+    }
+
     pub fn cont(&mut self, stack_id: usize, value: Value) -> RunResult {
         let stack = self.callstacks.get_mut(stack_id).unwrap();
         let val = match value {
@@ -258,23 +304,21 @@ impl Vm {
                 let c = &self.code_blocks[curr_blk as usize][pc as usize];
 
                 if self.log > 0 {
-                    print!("blk: {} pc: {}, code: {:?}", curr_blk, pc, c);
+                    print!("blk: {} pc: {}, code: {:?}", curr_blk, format_num(5, pc), c);
 
                     match c {
                         ByteCode::Load(i) => {
-                            let name = self.id_idt_map.get(&i).unwrap();
-                            let v = self.scope.lookup(stack.scope_id(), i);
-                            print!(" {} {:?}", name, v);
+                            print!(" {}", self.id_idt_map.get(&i).unwrap());
+                            print_stack_top(&mut self.scope, stack);
                         },
                         ByteCode::Store(i) => {
-                            let name = self.id_idt_map.get(&i).unwrap();
-                            let v = stack.peek_value();
-                            print!(" {} {:?}", name, v)
+                            print!(" {}", self.id_idt_map.get(&i).unwrap());
+                            print_stack_top(&mut self.scope, stack);
                         },
-                        ByteCode::JumpIfFalse(_) => print!(" {:?}", stack.peek_value()),
-                        ByteCode::Next => print!(" {:?}", stack.peek_value()),
+                        ByteCode::JumpIfFalse(_) => print_stack_top(&mut self.scope, stack),
+                        ByteCode::Next => print_stack_top(&mut self.scope, stack),
                         ByteCode::LoadConst(i) => print!(" {:?}", self.constants[*i as usize].clone()),
-                        ByteCode::Ret(_) => print!(" {:?}", stack.peek_value()),
+                        ByteCode::Ret(_) => print_stack_top(&mut self.scope, stack),
                         _ => {}
                     }
 
@@ -359,6 +403,21 @@ impl Vm {
                                     stack.set_pc(*inx);
                                 } 
                             },
+                            StackValue::Ref(r) => {
+                                let val = match self.scope.lookup(stack.scope_id(), &r) {
+                                    Some(v) => v,
+                                    None => todo!()
+                                };
+
+                                match val {
+                                    Value::List(arr) => {
+                                        if arr.len() < 1 {
+                                            stack.set_pc(*inx);
+                                        }
+                                    },
+                                    _ => todo!("{:?}", val)
+                                };
+                            },
                             _ => panic!("{:?}", v)
                         }
                     },
@@ -416,12 +475,7 @@ impl Vm {
                                 match val {
                                     Value::List(l) => {
                                         for arg in args {
-                                            match arg {
-                                                StackValue::Int(i) => {
-                                                    l.push(Value::Int(i));
-                                                },
-                                                _ => todo!("{:?}", arg)
-                                            }
+                                            l.push(Value::from(arg));
                                         }
                                     },
                                     _ => todo!("{:?}", val)
@@ -489,35 +543,51 @@ impl Vm {
                     ByteCode::Fun(i) => stack.push_value(StackValue::Fn(*i)),
                     ByteCode::Next => {
                         let val = stack.peek_value().unwrap();
-                        match val {
-                            StackValue::Ref(r) => {
-                                let val = match self.scope.lookup(stack.scope_id(), &(*r as u32)) {
-                                    Some(v) => v,
-                                    None => todo!()
-                                };
-
-                                let (id, inx) = match val {
-                                    Value::ListIter { inx, id } => (*id, *inx),
-                                    _ => todo!("{:?}", val)
-                                };
-
-                                let val = match self.scope.lookup(stack.scope_id(), &id) {
-                                    Some(v) => v,
-                                    None => todo!()
-                                };
-
-                                let val = match val {
-                                    Value::List(arr) => {
-                                        arr.get(inx as usize).unwrap()
-                                    },
-                                    _ => todo!("{:?}", val)
-                                };
-
-                                let val = StackValue::from(val);
-                                stack.push_value(val);
-                            },
+                        let r = match val {
+                            StackValue::Ref(r) => *r,
                             _ => todo!("{:?}", val)
+                        };
+
+                        if self.log > 1 {
+                            println!("next: {:?}", r);
                         }
+
+                        let val = {
+                            let val = match self.scope.lookup(stack.scope_id(), &r) {
+                                Some(v) => v,
+                                None => todo!()
+                            };
+
+                            let (id, inx) = match val {
+                                Value::ListIter { inx, id } => (*id, *inx),
+                                _ => todo!("{:?}", val)
+                            };
+                            let val = match self.scope.lookup(stack.scope_id(), &id) {
+                                Some(v) => v,
+                                None => todo!()
+                            };
+
+                            let v = match val {
+                                Value::List(arr) => {
+                                    match arr.get(inx as usize) {
+                                        Some(v) => v,
+                                        None => &Value::None
+                                    }
+                                },
+                                _ => todo!("{:?}", val)
+                            };
+                            StackValue::from(v)
+                        };
+
+                        if let StackValue::None = val {
+                            stack.pop_value();
+                        } else {
+                            if let Some(Value::ListIter { inx, id }) = self.scope.lookup(stack.scope_id(), &r) {
+                                *inx += 1
+                            }
+                        }
+
+                        stack.push_value(val);
                     },
                     ByteCode::MakeIter => {
                         let val = stack.pop_value().unwrap();
@@ -782,24 +852,20 @@ mod tests {
     #[test]
     fn function_calling() {
         let mut vm = Vm::new();
-        vm.log = 2;
         let res = vm.run_code(r#"
         a = () => return 1
         return a()
         "#);
-        println!("{:?}", vm.code_blocks);
         assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
     }
 
     #[test]
     fn function_call_with_args() {
         let mut vm = Vm::new();
-        vm.log = 2;
         let res = vm.run_code(r#"
         a = (a) => return a
         return a(1)
         "#);
-        println!("{:?}", vm.code_blocks);
         assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
     }
 
@@ -819,7 +885,6 @@ mod tests {
     #[test]
     fn await_fun() {
         let mut vm = Vm::new();
-        vm.log = 1;
         let res = vm.run_code("await(test())");
 
         assert_eq!(res, RunResult::Await {
@@ -876,7 +941,6 @@ mod tests {
     #[test]
     fn push_to_list() {
         let mut vm = Vm::new();
-        vm.log = 2;
         let res = vm.run_code(r#"
         a = [1,2,3]
         a.push(4)
