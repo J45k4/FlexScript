@@ -921,6 +921,7 @@ impl Vm {
     pub fn store_idt(&mut self, name: String) -> u32 {
         match name.as_str() {
             "push" => return PUSH_METHOD,
+            "pop" => return POP_METHOD,
             "map" => return MAP_METHOD,
             _ => {}
         };

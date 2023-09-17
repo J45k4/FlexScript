@@ -212,6 +212,33 @@ mod tests {
     }
 
     #[test]
+    fn pop_from_list() {
+        let mut vm = Vm::new();
+        let res = vm.run_code(r#"
+        a = [1,2,3]
+        a.pop()
+        return a
+        "#);
+
+        match res {
+            RunResult::Value { value, .. } => {
+                let arr = match value {
+                    Value::Ptr(p) => match vm.get_val(0, p) {
+                        Some(Value::List(arr)) => arr,
+                        _ => panic!("Invalid result")
+                    },
+                    _ => panic!("Invalid result")
+                };
+                assert_eq!(arr, &mut vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                ]);
+            },
+            _ => panic!("Invalid result")
+        }
+    }
+
+    #[test]
     fn map_list() {
         let mut vm = Vm::new();
         let res = vm.run_code(r#"return [1,2].map(p => return p * 2)"#);
