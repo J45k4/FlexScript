@@ -214,7 +214,6 @@ mod tests {
     #[test]
     fn map_list() {
         let mut vm = Vm::new();
-        vm.log = 2;
         let res = vm.run_code(r#"return [1,2].map(p => return p * 2)"#);
         match res {
             RunResult::Value { value, .. } => {

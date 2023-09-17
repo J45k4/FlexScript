@@ -47,6 +47,12 @@ fn format_num(digits: u32, num: u32) -> String {
     s
 }
 
+struct BuildinRes {
+    call: Option<Call>,
+    stack_val: Option<StackValue>,
+    disable_buildin: bool
+}
+
 pub struct Vm {
     scopes: Vec<usize>,
     constants: Vec<Value>,
@@ -302,41 +308,21 @@ impl Vm {
                 return RunResult::None;
             }
 
-            let scope_id = stack.scope_id();
-            match stack.get_buildin() {
-                BuildIn::Map { obj, inx, blk } => {
-                    let val = match self.scope.lookup(scope_id, &obj) {
-                        Some(v) => v,
-                        None => todo!()
-                    };
-
-                    match val {
-                        Value::List(list) => {
-                            if *inx as usize >= list.len() {
-                                stack.set_buildin(BuildIn::None);
-                            } else {
-                                *inx += 1;
-                            }
-                        },
-                        _ => {}
-                    }   
-                },
-                BuildIn::None => {},
-            }
-
             if self.log > 1 {
                 println!("stack: {:?}", stack);
             }
 
             loop {
-                let call = match stack.get_buildin() {
+                let scope_id = stack.scope_id();
+
+                let buidin_res = match stack.get_buildin() {
                     BuildIn::Map { obj, inx, blk } => {
                         if self.log > 0 {
                             let m = match self.scope.lookup(scope_id, &obj) {
                                 Some(v) => format!("{:?}", v),
                                 None => "None".to_string()
                             };
-                            print!("map: {} blk: {}", m, blk);
+                            print!("map: {} inx: {} blk: {}", m, inx, blk);
                         }
                         
                         let p = {
@@ -345,33 +331,70 @@ impl Vm {
                                 None => todo!()
                             };
 
+                            let i = *inx as usize;
                             match val {
-                                Value::List(arr) => StackValue::from(&arr[*inx as usize]),
+                                Value::List(list) => {
+                                    match list.get(i) {
+                                        Some(v) => StackValue::from(v),
+                                        None => {
+                                            print!(" val: None");
+                                            StackValue::None
+                                        }
+                                    }
+                                },
                                 _ => todo!("{:?}", val)
                             }
                         };
+                        let ret = match p {
+                            StackValue::None => BuildinRes {
+                                call: None,
+                                disable_buildin: true,
+                                stack_val: Some(StackValue::Ref(*obj))
+                            },
+                            _ => {
+                                let scope_id = self.scope.create_child_scope(scope_id);
+    
+                                let args = vec![
+                                    StackValue::Int(*inx as i64),
+                                    p,
+                                ];
+        
+                                print!(" args: {:?}", args);
 
-                        let scope_id = self.scope.create_child_scope(scope_id);
-
-                        let args = vec![
-                            StackValue::Int(*inx as i64),
-                            p,
-                        ];
-
-                        println!(" args: {:?}", args);
-
-                        Some(Call {
-                            blk: *blk,
-                            scope_id,
-                            values: args,
-                            ..Default::default()
-                        })
+                                BuildinRes {
+                                    call: Some(Call {
+                                        blk: *blk,
+                                        scope_id,
+                                        values: args,
+                                        ..Default::default()
+                                    }),
+                                    disable_buildin: false,
+                                    stack_val: None
+                                }
+                            }
+                        };
+                        if self.log > 0 {
+                            println!();
+                        }
+                        ret
                     },
-                    BuildIn::None => None
+                    BuildIn::None => BuildinRes { 
+                        call: None, 
+                        stack_val: None, 
+                        disable_buildin: false 
+                    }
                 };
 
-                if let Some(call) = call {
+                if buidin_res.disable_buildin {
+                    stack.set_buildin(BuildIn::None);
+                }
+
+                if let Some(call) = buidin_res.call {
                     stack.push(call);
+                }
+
+                if let Some(v) = buidin_res.stack_val {
+                    stack.push_value(v);
                 }
 
                 let mut curr_blk = match stack.blk() {
@@ -592,6 +615,8 @@ impl Vm {
                                                     },
                                                     _ => todo!("{:?}", val)
                                                 }
+
+                                                continue;
                                             },
                                             _ => todo!()
                                         }
@@ -649,13 +674,12 @@ impl Vm {
                         stack.push_value(StackValue::Ref(id));
                     },
                     ByteCode::Assign => todo!(),
-                    ByteCode::Ret(c) => {
+                    ByteCode::Ret(_) => {
                         if stack.depth() > 1 {
                             let v = match stack.pop_value() {
                                 Some(v) => v,
                                 None => StackValue::None
-                            };
-                            
+                            };  
                             stack.pop();
                             stack.push_value(v);
                         } else {
@@ -816,6 +840,32 @@ impl Vm {
                     },
                     _ => todo!("{:?}", c)
                 };
+
+                let tos = match stack.get_buildin() {
+                    BuildIn::None => StackValue::None,
+                    _ => match stack.pop_value() {
+                        Some(v) => v,
+                        None => StackValue::None
+                    }
+                };
+
+                let scope_id = stack.scope_id();
+                match stack.get_buildin() {
+                    BuildIn::Map { obj, inx, blk } => {
+                        let val = match self.scope.lookup(scope_id, &obj) {
+                            Some(v) => v,
+                            None => todo!()
+                        };
+
+                        match val {
+                            Value::List(list) => list[*inx as usize] = Value::from(tos),
+                            _ => todo!("{:?}", val)
+                        };
+
+                        *inx += 1;
+                    },
+                    BuildIn::None => {}
+                }
             }
 
             stack.pop();
