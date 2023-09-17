@@ -1,11 +1,28 @@
 use crate::StackValue;
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum BuildIn {
+    Map {
+        obj: u32,
+        inx: u32,
+        blk: u32,
+    },
+    None
+}
+
+impl Default for BuildIn {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Call {
     pub blk: u32,
     pub pc: u32,
     pub scope_id: u32,
     pub values: Vec<StackValue>,
+    pub buildin: BuildIn,
 }
 
 impl Call {
@@ -85,5 +102,17 @@ impl Callstack {
 
     pub fn set_scope_id(&mut self, scope_id: u32) {
         self.stack.last_mut().unwrap().scope_id = scope_id;
+    }
+
+    pub fn set_buildin(&mut self, buildin: BuildIn) {
+        self.stack.last_mut().unwrap().buildin = buildin;
+    }
+
+    pub fn get_buildin(&mut self) -> &mut BuildIn {
+        &mut self.stack.last_mut().unwrap().buildin
+    }
+
+    pub fn depth(&self) -> usize {
+        self.stack.len()
     }
 }

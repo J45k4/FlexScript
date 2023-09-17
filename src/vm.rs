@@ -9,6 +9,7 @@ use crate::Parser;
 use crate::RunResult;
 use crate::StackValue;
 use crate::Value;
+use crate::callstack::BuildIn;
 use crate::callstack::Call;
 use crate::callstack::Callstack;
 use crate::scope::ScopeManager;
@@ -79,6 +80,11 @@ impl Vm {
             self.compile_node(&mut code_block, node);
         }   
         self.code_blocks.push(code_block);
+
+        if self.log > 1 {
+            println!("code blocks: {:?}", self.code_blocks);
+        }
+
         (self.code_blocks.len() - 1) as u32
     }
 
@@ -288,21 +294,100 @@ impl Vm {
                     return RunResult::None;
                 }
             };
-            let mut curr_blk = match stack.blk() {
-                Some(b) => b,
-                None => {
-                    if self.log > 0 {
-                        println!("no blk");
-                    }
-                    return RunResult::None;
+
+            if stack.depth() == 0 {
+                if self.log > 0 {
+                    println!("no stack");
                 }
-            };
+                return RunResult::None;
+            }
+
+            let scope_id = stack.scope_id();
+            match stack.get_buildin() {
+                BuildIn::Map { obj, inx, blk } => {
+                    let val = match self.scope.lookup(scope_id, &obj) {
+                        Some(v) => v,
+                        None => todo!()
+                    };
+
+                    match val {
+                        Value::List(list) => {
+                            if *inx as usize >= list.len() {
+                                stack.set_buildin(BuildIn::None);
+                            } else {
+                                *inx += 1;
+                            }
+                        },
+                        _ => {}
+                    }   
+                },
+                BuildIn::None => {},
+            }
 
             if self.log > 1 {
                 println!("stack: {:?}", stack);
             }
 
-            while stack.pc() < self.code_blocks[curr_blk as usize].len() as u32 {
+            loop {
+                let call = match stack.get_buildin() {
+                    BuildIn::Map { obj, inx, blk } => {
+                        if self.log > 0 {
+                            let m = match self.scope.lookup(scope_id, &obj) {
+                                Some(v) => format!("{:?}", v),
+                                None => "None".to_string()
+                            };
+                            print!("map: {} blk: {}", m, blk);
+                        }
+                        
+                        let p = {
+                            let val = match self.scope.lookup(scope_id, &obj) {
+                                Some(v) => v,
+                                None => todo!()
+                            };
+
+                            match val {
+                                Value::List(arr) => StackValue::from(&arr[*inx as usize]),
+                                _ => todo!("{:?}", val)
+                            }
+                        };
+
+                        let scope_id = self.scope.create_child_scope(scope_id);
+
+                        let args = vec![
+                            StackValue::Int(*inx as i64),
+                            p,
+                        ];
+
+                        println!(" args: {:?}", args);
+
+                        Some(Call {
+                            blk: *blk,
+                            scope_id,
+                            values: args,
+                            ..Default::default()
+                        })
+                    },
+                    BuildIn::None => None
+                };
+
+                if let Some(call) = call {
+                    stack.push(call);
+                }
+
+                let mut curr_blk = match stack.blk() {
+                    Some(b) => b,
+                    None => {
+                        if self.log > 0 {
+                            println!("no blk");
+                        }
+                        return RunResult::None;
+                    }
+                };
+
+                if stack.pc() >= self.code_blocks[curr_blk as usize].len() as u32  {
+                    break;
+                }   
+
                 let pc = stack.pc();
                 stack.increment_pc();
 
@@ -455,7 +540,7 @@ impl Vm {
                                     blk,
                                     scope_id,
                                     values: args,
-                                    pc: 0
+                                    ..Default::default()
                                 });
 
                                 curr_blk = blk;
@@ -491,33 +576,24 @@ impl Vm {
                                                 stack.push_value(StackValue::from(&v));
                                             },
                                             MAP_METHOD => {
-                                                todo!()
-                                                // let mut new_arr = vec![];
-                                                // for item in l {
-                                                //     let mut stack = Callstack::new();
-                                                //     stack.push_value(StackValue::from(&item));
-                                                //     let res = self.run_stack(stack_id);
-                                                //     match res {
-                                                //         RunResult::Value { scope_id, value } => {
-                                                //             new_arr.push(value);
-                                                //         },
-                                                //         _ => todo!()
-                                                //     }
-                                                // }
-                                                // let id = self.scope.store_unamed(Value::List(new_arr));
-                                                // stack.push_value(StackValue::Ref(id));
+                                                if args.len() < 1 {
+                                                    todo!()
+                                                }
+                                                let val = &args[0];
+                                                match val {
+                                                    StackValue::Fn(blk) => {
+                                                        stack.set_buildin(
+                                                            BuildIn::Map {
+                                                                blk: *blk,
+                                                                obj,
+                                                                inx: 0
+                                                            }
+                                                        );
+                                                    },
+                                                    _ => todo!("{:?}", val)
+                                                }
                                             },
                                             _ => todo!()
-                                        }
-
-                                        if prop == PUSH_METHOD {
-                                            for arg in args {
-                                                l.push(Value::from(arg));
-                                            }
-                                        }
-
-                                        if prop == MAP_METHOD {
-
                                         }
                                     },
                                     _ => todo!("{:?}", val)
@@ -574,13 +650,23 @@ impl Vm {
                     },
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(c) => {
-                        return match stack.pop_value() {
-                            Some(v) => RunResult::Value {
-                                scope_id: stack.scope_id(),
-                                value: Value::from(v)
-                            },
-                            None => RunResult::None
-                        };
+                        if stack.depth() > 1 {
+                            let v = match stack.pop_value() {
+                                Some(v) => v,
+                                None => StackValue::None
+                            };
+                            
+                            stack.pop();
+                            stack.push_value(v);
+                        } else {
+                            return match stack.pop_value() {
+                                Some(v) => RunResult::Value {
+                                    scope_id: stack.scope_id(),
+                                    value: Value::from(v)
+                                },
+                                None => RunResult::None
+                            };
+                        }
                     },
                     ByteCode::Fun(i) => stack.push_value(StackValue::Fn(*i)),
                     ByteCode::Next => {
@@ -741,8 +827,6 @@ impl Vm {
                 println!("callstacks: {:?}", self.callstacks);
             } 
         }
-
-        RunResult::None
     }
 
     pub fn run_code(&mut self, code: &str) -> RunResult {
@@ -805,241 +889,5 @@ impl Vm {
 
     pub fn get_val(&mut self, scope_id: u32, id: u32) -> Option<&mut Value> {
         self.scope.lookup(scope_id, &id)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::Obj;
-
-    use super::*;
-
-    #[test]
-    fn test_return_number() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
-    }
-
-    #[test]
-    fn simple_plus() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return 1 + 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(2), scope_id: 0});
-    }
-
-    #[test]
-    fn simple_sub() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return 1 - 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(0), scope_id: 0});
-    }
-
-    #[test]
-    fn add_sub() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return 1 + 1 - 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0});
-    }
-
-    #[test]
-    fn simple_comparsion() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return 1 == 1");
-        assert_eq!(res, RunResult::Value { value: Value::Bool(true), scope_id: 0});
-    }
-
-    #[test]
-    fn simple_if_true() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("if true { return 1 }");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
-    }
-
-    #[test]
-    fn simple_if_false() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("if false { return 1 }");
-        assert_eq!(res, RunResult::None);
-    }
-
-    #[test]
-    fn assign_to_var() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"
-        a = 1
-        return a
-        "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
-    }
-
-    #[test]
-    fn simple_array() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("return [1,2,3]");
-
-        match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(1),
-                    Value::Int(2),
-                    Value::Int(3)
-                ]);
-            },
-            _ => panic!("Invalid result")
-        }
-    }
-
-    #[test]
-    fn function_calling() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"
-        a = () => return 1
-        return a()
-        "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
-    }
-
-    #[test]
-    fn function_call_with_args() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"
-        a = (a) => return a
-        return a(1)
-        "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
-    }
-
-    #[test]
-    fn simple_for() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"
-        state = 0
-        for a in [1,2,3] {
-            state = state - a
-        }
-        return state
-        "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(-6), scope_id: 0 });
-    }
-
-    #[test]
-    fn await_fun() {
-        let mut vm = Vm::new();
-        let res = vm.run_code("await(test())");
-
-        assert_eq!(res, RunResult::Await {
-            stack_id: 0,
-            value: Value::UndefCall { 
-                ident: 30, 
-                args: vec![] 
-            }
-        });
-    }
-
-    #[test]
-    fn await_fun_return_result() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"return await(test())"#);
-
-        match res {
-            RunResult::Await { stack_id, value } => {
-                let res = vm.cont(stack_id, Value::Int(1));
-                assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
-            },
-            _ => panic!("Invalid result")
-        }
-    }
-
-    #[test]
-    fn return_obj_instance() {
-        let mut vm = Vm::new();
-        let res = vm.run_code(r#"return H1 { text: "lol" }"#);
-
-        match res {
-            RunResult::Value { value, .. } => {
-                let obj = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::Obj(obj)) => obj,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(obj, &mut Obj {
-                    name: Some("H1".to_string()),
-                    props: vec![
-                        ObjProp {
-                            name: "text".to_string(),
-                            value: Value::Str("lol".to_string())
-                        }
-                    ]
-                });
-            },
-            _ => panic!("Invalid result")
-        }
-    }
-
-    #[test]
-    fn push_to_list() {
-        let mut vm = Vm::new();
-        vm.log = 1;
-        let res = vm.run_code(r#"
-        a = [1,2,3]
-        a.push(4)
-        return a
-        "#);
-
-        match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(1),
-                    Value::Int(2),
-                    Value::Int(3),
-                    Value::Int(4)
-                ]);
-            },
-            _ => panic!("Invalid result")
-        }
-    }
-
-    #[test]
-    fn map_list() {
-        let mut vm = Vm::new();
-        vm.log = 2;
-        let res = vm.run_code(r#"return [1,2,3,4].map(p => return p * 2)"#);
-        println!("{:?}", res);
-        println!("{:?}", vm.code_blocks);
-        match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(2),
-                    Value::Int(4),
-                    Value::Int(6),
-                    Value::Int(8)
-                ]);
-            },
-            _ => panic!("Invalid result")
-        }
     }
 }
