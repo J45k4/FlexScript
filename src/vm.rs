@@ -810,18 +810,10 @@ impl Vm {
                                 _ => todo!("{:?}", k)
                             };
 
-                            let v = match v {
-                                StackValue::Int(i) => Value::Int(i),
-                                StackValue::Float(f) => Value::Float(f),
-                                StackValue::Str(s) => Value::Str(s),
-                                StackValue::Bool(b) => Value::Bool(b),
-                                _ => todo!("{:?}", v)
-                            };
-
                             obj.props.push(
                                 ObjProp {
                                     name: key,
-                                    value: v
+                                    value: Value::from(v)
                                 }
                             );
                         }
