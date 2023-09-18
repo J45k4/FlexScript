@@ -933,4 +933,37 @@ impl Vm {
     pub fn get_val(&mut self, scope_id: u32, id: u32) -> Option<&mut Value> {
         self.scope.lookup(scope_id, &id)
     }
+
+    pub fn clone_val(&mut self, scope_id: u32, val: Value) -> Value {
+        match val {
+            Value::Ptr(id) => {
+                match self.scope.lookup(scope_id, &id) {
+                    Some(v) => {
+                        match v {
+                            Value::Obj(o) => {
+                                let o = o.clone();
+        
+                                Value::Obj(
+                                    Obj {
+                                        name: o.name.clone(),
+                                        props: o.props.iter().map(|p| {
+                                            let p = p.clone();
+        
+                                            ObjProp {
+                                                name: p.name.clone(),
+                                                value: self.clone_val(scope_id, p.value)
+                                            }
+                                        }).collect()
+                                    }
+                                )
+                            },
+                            _ => v.clone()
+                        }
+                    },
+                    None => Value::None
+                }
+            },
+            _ => val
+        }
+    }
 }

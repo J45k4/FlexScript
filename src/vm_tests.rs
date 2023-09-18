@@ -259,4 +259,52 @@ mod tests {
             _ => panic!("Invalid result")
         }
     }
+
+    #[test]
+    fn nested_obj() {
+        let mut vm = Vm::new();
+
+        let res = vm.run_code(r#"
+        return Html {
+            head: Head {
+                title: "hello"
+            },
+            body: []
+        }"#);
+
+        
+        match res {
+            RunResult::Value { value, scope_id } => {
+                let v = vm.clone_val(scope_id, value);
+                let expected = Value::Obj(
+                    Obj {
+                        name: Some("Html".to_string()),
+                        props: vec![
+                            ObjProp {
+                                name: "body".to_string(),
+                                value: Value::List(vec![])
+                            },
+                            ObjProp {
+                                name: "head".to_string(),
+                                value: Value::Obj(
+                                    Obj {
+                                        name: Some("Head".to_string()),
+                                        props: vec![
+                                            ObjProp {
+                                                name: "title".to_string(),
+                                                value: Value::Str("hello".to_string())
+                                            }
+                                        ]
+                                    }
+                                )
+                            }
+                        ]
+                    }
+                );
+
+                assert_eq!(v, expected);
+            },
+            _ => panic!("Invalid result")
+        }
+    }
 }
