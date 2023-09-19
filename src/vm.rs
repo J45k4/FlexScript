@@ -976,6 +976,15 @@ impl Vm {
                                     }
                                 )
                             },
+                            Value::List(l) => {
+                                let l = l.clone();
+        
+                                Value::List(
+                                    l.iter().map(|v| {
+                                        self.clone_val(scope_id, v.clone())
+                                    }).collect()
+                                )
+                            },
                             _ => v.clone()
                         }
                     },

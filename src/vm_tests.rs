@@ -342,4 +342,47 @@ mod tests {
             _ => panic!("Invalid result")
         }
     }
+
+    #[test]
+    fn cloning_obj_with_prop_with_array_of_objects() {
+        let mut vm = Vm::new();
+
+        let res = vm.run_code(r#"
+        return Obj {
+            persons: [Person { name: "test" }]
+        }"#);
+
+        match res {
+            RunResult::Value { value, scope_id } => {
+                let v = vm.clone_val(scope_id, value);
+                println!("{:?}", v);
+                let expected = Value::Obj(
+                    Obj {
+                        name: Some("Obj".to_string()),
+                        props: vec![
+                            ObjProp {
+                                name: "persons".to_string(),
+                                value: Value::List(vec![
+                                    Value::Obj(
+                                        Obj {
+                                            name: Some("Person".to_string()),
+                                            props: vec![
+                                                ObjProp {
+                                                    name: "name".to_string(),
+                                                    value: Value::Str("test".to_string())
+                                                }
+                                            ]
+                                        }
+                                    )
+                                ])
+                            }
+                        ]
+                    }
+                );
+
+                assert_eq!(v, expected);
+            },
+            _ => panic!("Invalid result")
+        }
+    }
 }
