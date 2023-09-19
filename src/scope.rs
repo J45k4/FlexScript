@@ -42,8 +42,8 @@ impl ScopeManager {
         scope.vars.insert(var_id, val);
     }
 
-    pub fn store_unamed(&mut self, val: Value) -> u32 {
-        let scope = self.scopes.last_mut().unwrap();
+    pub fn store_unamed(&mut self, scope_id: u32, val: Value) -> u32 {
+        let scope = self.scopes.get_mut(scope_id as usize).unwrap();
         scope.store_unamed(val)
     }
 

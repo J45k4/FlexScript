@@ -307,4 +307,39 @@ mod tests {
             _ => panic!("Invalid result")
         }
     }
+
+    #[test]
+    fn mapping_list_to_obj_prop() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+
+        let res = vm.run_code(r#"
+        return Obj {
+            numbers: [1, 2, 3].map((p) => return p * 2)
+        }"#);
+
+        match res {
+            RunResult::Value { value, scope_id } => {
+                let v = vm.clone_val(scope_id, value);
+                let expected = Value::Obj(
+                    Obj {
+                        name: Some("Obj".to_string()),
+                        props: vec![
+                            ObjProp {
+                                name: "numbers".to_string(),
+                                value: Value::List(vec![
+                                    Value::Int(2),
+                                    Value::Int(4),
+                                    Value::Int(6),
+                                ])
+                            }
+                        ]
+                    }
+                );
+
+                assert_eq!(v, expected);
+            },
+            _ => panic!("Invalid result")
+        }
+    }
 }

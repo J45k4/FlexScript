@@ -358,8 +358,10 @@ impl Vm {
                                     StackValue::Int(*inx as i64),
                                     p,
                                 ];
-        
-                                print!(" args: {:?}", args);
+
+                                if self.log > 0 {
+                                    print!(" args: {:?}", args);
+                                }
 
                                 BuildinRes {
                                     call: Some(Call {
@@ -670,11 +672,19 @@ impl Vm {
                             items.push(v);
                         }
                         items.reverse();
-                        let id = self.scope.store_unamed(Value::List(items));
+                        let id = self.scope.store_unamed(scope_id, Value::List(items));
+                        if self.log > 1 {
+                            println!("make array scope_id: {} id: {:?}", scope_id, id);
+                        }
                         stack.push_value(StackValue::Ref(id));
                     },
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(_) => {
+                        if self.log > 1 {
+                            println!("stack: {:?}", stack);
+                            println!("stack depth: {}", stack.depth());
+                        }
+
                         if stack.depth() > 1 {
                             let v = match stack.pop_value() {
                                 Some(v) => v,
@@ -753,7 +763,7 @@ impl Vm {
 
                                 match val {
                                     Value::List(arr) => {
-                                        let it_id = self.scope.store_unamed(Value::ListIter {
+                                        let it_id = self.scope.store_unamed(scope_id, Value::ListIter {
                                             inx: 0,
                                             id: r
                                         });
@@ -818,7 +828,16 @@ impl Vm {
                             );
                         }
 
-                        let id = self.scope.store_unamed(Value::Obj(obj));
+                        if self.log > 1 {
+                            println!("obj: {:?}", obj);
+                        }
+
+                        let id = self.scope.store_unamed(scope_id, Value::Obj(obj));
+
+                        if self.log > 1 {
+                            println!("obj scope_id: {} id: {}", scope_id, id);
+                        }
+
                         stack.push_value(StackValue::Ref(id));
                     },
                     ByteCode::AccessProp(a) => {
