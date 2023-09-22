@@ -2,10 +2,12 @@ use std::collections::HashMap;
 
 use crate::ASTNode;
 use crate::ForCond;
+use crate::ListIter;
 use crate::Obj;
 use crate::ObjProp;
 use crate::Op;
 use crate::Parser;
+use crate::Ptr;
 use crate::RunResult;
 use crate::StackValue;
 use crate::Value;
@@ -18,6 +20,7 @@ use crate::vm_types::ByteCode;
 const PUSH_METHOD: u32 = 1;
 const POP_METHOD: u32 = 2;
 const MAP_METHOD: u32 = 3;
+const DEL_FUN: u32 = 4;
 const FIRST_IDT: u32 = 30;
 
 fn print_stack_top(scope: &mut ScopeManager, stack: &Callstack) {
@@ -27,8 +30,8 @@ fn print_stack_top(scope: &mut ScopeManager, stack: &Callstack) {
     };
 
     match v {
-        StackValue::Ref(r) => {
-            let val = match scope.lookup(stack.scope_id(), &r) {
+        StackValue::Ptr(ptr) => {
+            let val = match scope.lookup(ptr.scope_id, &ptr.id) {
                 Some(v) => v.clone(),
                 None => Value::None
             };
@@ -253,25 +256,6 @@ impl Vm {
         }
     }
 
-    fn print_stack_top(&mut self, stack: &Callstack) {
-        let v = match stack.peek_value() {
-            Some(v) => v.clone(),
-            None => StackValue::None
-        };
-
-        match v {
-            StackValue::Ref(r) => {
-                let val = match self.scope.lookup(stack.scope_id(), &r) {
-                    Some(v) => v.clone(),
-                    None => Value::None
-                };
-
-                print!(" {:?}", val);
-            },
-            _ => print!(" {:?}", v)
-        }
-    }
-
     pub fn cont(&mut self, stack_id: usize, value: Value) -> RunResult {
         let stack = self.callstacks.get_mut(stack_id).unwrap();
         let val = match value {
@@ -316,9 +300,9 @@ impl Vm {
                 let scope_id = stack.scope_id();
 
                 let buidin_res = match stack.get_buildin() {
-                    BuildIn::Map { obj, inx, blk } => {
+                    BuildIn::Map { ptr, inx, blk } => {
                         if self.log > 0 {
-                            let m = match self.scope.lookup(scope_id, &obj) {
+                            let m = match self.scope.lookup(ptr.scope_id, &ptr.id) {
                                 Some(v) => format!("{:?}", v),
                                 None => "None".to_string()
                             };
@@ -326,7 +310,7 @@ impl Vm {
                         }
                         
                         let p = {
-                            let val = match self.scope.lookup(scope_id, &obj) {
+                            let val = match self.scope.lookup(ptr.scope_id, &ptr.id) {
                                 Some(v) => v,
                                 None => todo!()
                             };
@@ -349,7 +333,7 @@ impl Vm {
                             StackValue::None => BuildinRes {
                                 call: None,
                                 disable_buildin: true,
-                                stack_val: Some(StackValue::Ref(*obj))
+                                stack_val: Some(StackValue::Ptr(ptr.clone()))
                             },
                             _ => {
                                 let scope_id = self.scope.create_child_scope(scope_id);
@@ -519,8 +503,8 @@ impl Vm {
                                     stack.set_pc(*inx);
                                 } 
                             },
-                            StackValue::Ref(r) => {
-                                let val = match self.scope.lookup(stack.scope_id(), &r) {
+                            StackValue::Ptr(ptr) => {
+                                let val = match self.scope.lookup(ptr.id, &ptr.id) {
                                     Some(v) => v,
                                     None => todo!()
                                 };
@@ -582,8 +566,8 @@ impl Vm {
                                     args
                                 });
                             },
-                            StackValue::PropAccess { obj, prop } => {
-                                let val = match self.scope.lookup(stack.scope_id(), &obj) {
+                            StackValue::PropAccess { ptr, prop } => {
+                                let val = match self.scope.lookup(ptr.scope_id, &ptr.id) {
                                     Some(v) => v,
                                     None => todo!()
                                 };
@@ -610,7 +594,7 @@ impl Vm {
                                                         stack.set_buildin(
                                                             BuildIn::Map {
                                                                 blk: *blk,
-                                                                obj,
+                                                                ptr: ptr,
                                                                 inx: 0
                                                             }
                                                         );
@@ -672,11 +656,11 @@ impl Vm {
                             items.push(v);
                         }
                         items.reverse();
-                        let id = self.scope.store_unamed(scope_id, Value::List(items));
+                        let ptr = self.scope.store_unamed(scope_id, Value::List(items));
                         if self.log > 1 {
-                            println!("make array scope_id: {} id: {:?}", scope_id, id);
+                            println!("make array ptr: {:?}", ptr);
                         }
-                        stack.push_value(StackValue::Ref(id));
+                        stack.push_value(StackValue::Ptr(ptr));
                     },
                     ByteCode::Assign => todo!(),
                     ByteCode::Ret(_) => {
@@ -687,7 +671,16 @@ impl Vm {
 
                         if stack.depth() > 1 {
                             let v = match stack.pop_value() {
-                                Some(v) => v,
+                                Some(v) =>  {
+                                    match v {
+                                        StackValue::Ptr(ptr) => {
+                                            let parent_scope = self.scope.get_parent_scope(scope_id).unwrap();
+                                            let ptr = self.scope.move_to(&ptr.id, ptr.scope_id, parent_scope);
+                                            StackValue::Ptr(ptr)
+                                        },
+                                        _ => v
+                                    }
+                                },
                                 None => StackValue::None
                             };  
                             stack.pop();
@@ -706,7 +699,7 @@ impl Vm {
                     ByteCode::Next => {
                         let val = stack.peek_value().unwrap();
                         let r = match val {
-                            StackValue::Ref(r) => *r,
+                            StackValue::Ptr(ptr) => ptr.clone(),
                             _ => todo!("{:?}", val)
                         };
 
@@ -715,23 +708,23 @@ impl Vm {
                         }
 
                         let val = {
-                            let val = match self.scope.lookup(stack.scope_id(), &r) {
+                            let val = match self.scope.lookup(r.scope_id, &r.id) {
                                 Some(v) => v,
                                 None => todo!()
                             };
 
-                            let (id, inx) = match val {
-                                Value::ListIter { inx, id } => (*id, *inx),
+                            let it = match val {
+                                Value::ListIter(it)=> it.clone(),
                                 _ => todo!("{:?}", val)
                             };
-                            let val = match self.scope.lookup(stack.scope_id(), &id) {
+                            let val = match self.scope.lookup(stack.scope_id(), &it.ptr.id) {
                                 Some(v) => v,
                                 None => todo!()
                             };
 
                             let v = match val {
                                 Value::List(arr) => {
-                                    match arr.get(inx as usize) {
+                                    match arr.get(it.inx as usize) {
                                         Some(v) => v,
                                         None => &Value::None
                                     }
@@ -744,8 +737,8 @@ impl Vm {
                         if let StackValue::None = val {
                             stack.pop_value();
                         } else {
-                            if let Some(Value::ListIter { inx, id }) = self.scope.lookup(stack.scope_id(), &r) {
-                                *inx += 1
+                            if let Some(Value::ListIter(it)) = self.scope.lookup(r.scope_id, &r.id) {
+                                it.inx += 1
                             }
                         }
 
@@ -755,19 +748,21 @@ impl Vm {
                         let val = stack.pop_value().unwrap();
 
                         match val {
-                            StackValue::Ref(r) => {
-                                let val = match self.scope.lookup(stack.scope_id(), &r) {
+                            StackValue::Ptr(ptr) => {
+                                let val = match self.scope.lookup(ptr.scope_id, &ptr.id) {
                                     Some(v) => v,
                                     None => todo!()
                                 };
 
                                 match val {
-                                    Value::List(arr) => {
-                                        let it_id = self.scope.store_unamed(scope_id, Value::ListIter {
-                                            inx: 0,
-                                            id: r
-                                        });
-                                        stack.push_value(StackValue::Ref(it_id));
+                                    Value::List(list) => {
+                                        let ptr = self.scope.store_unamed(scope_id, Value::ListIter(
+                                            ListIter {
+                                                ptr,
+                                                inx: 0
+                                            }
+                                        ));
+                                        stack.push_value(StackValue::Ptr(ptr));
                                     },
                                     _ => todo!("{:?}", val)
                                 };
@@ -832,19 +827,19 @@ impl Vm {
                             println!("obj: {:?}", obj);
                         }
 
-                        let id = self.scope.store_unamed(scope_id, Value::Obj(obj));
+                        let ptr = self.scope.store_unamed(scope_id, Value::Obj(obj));
 
                         if self.log > 1 {
-                            println!("obj scope_id: {} id: {}", scope_id, id);
+                            println!("obj ptr: {:?}", ptr);
                         }
 
-                        stack.push_value(StackValue::Ref(id));
+                        stack.push_value(StackValue::Ptr(ptr));
                     },
                     ByteCode::AccessProp(a) => {
                         let val = stack.pop_value().unwrap();
                         match val {
-                            StackValue::Ref(r) => {
-                                stack.push_value(StackValue::PropAccess { obj: r, prop: *a });
+                            StackValue::Ptr(ptr) => {
+                                stack.push_value(StackValue::PropAccess { ptr: ptr.clone(), prop: *a });
                             },
                             _ => todo!("{:?}", val)
                         };
@@ -862,8 +857,8 @@ impl Vm {
 
                 let scope_id = stack.scope_id();
                 match stack.get_buildin() {
-                    BuildIn::Map { obj, inx, blk } => {
-                        let val = match self.scope.lookup(scope_id, &obj) {
+                    BuildIn::Map { ptr, inx, blk } => {
+                        let val = match self.scope.lookup(ptr.scope_id, &ptr.id) {
                             Some(v) => v,
                             None => todo!()
                         };
@@ -955,8 +950,8 @@ impl Vm {
 
     pub fn clone_val(&mut self, scope_id: u32, val: Value) -> Value {
         match val {
-            Value::Ptr(id) => {
-                match self.scope.lookup(scope_id, &id) {
+            Value::Ptr(ptr) => {
+                match self.scope.lookup(ptr.scope_id, &ptr.id) {
                     Some(v) => {
                         match v {
                             Value::Obj(o) => {

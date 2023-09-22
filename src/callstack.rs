@@ -1,9 +1,10 @@
+use crate::Ptr;
 use crate::StackValue;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BuildIn {
     Map {
-        obj: u32,
+        ptr: Ptr,
         inx: u32,
         blk: u32,
     },

@@ -2,6 +2,7 @@
 mod tests {
     use crate::Obj;
     use crate::ObjProp;
+    use crate::Property;
     use crate::RunResult;
     use crate::Value;
     use crate::Vm;
@@ -110,6 +111,37 @@ mod tests {
         return a(1)
         "#);
         assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
+    }
+
+    #[test]
+    fn function_call_move_return_value_to_different_scope() {
+        let mut vm = Vm::new();
+        let res = vm.run_code(r#"
+        a = () => {
+            person = Person {
+                name: "Seppo"
+            }
+
+            return person
+        }
+        new_person = a()
+        return new_person
+        "#);
+        let expected = RunResult::Value { 
+            value: Value::Obj(
+                Obj { 
+                    name: Some("Person".to_string()), 
+                    props: vec![
+                        ObjProp {
+                            name: "name".to_string(),
+                            value: Value::Str("Seppo".to_string())
+                        }
+                    ]
+                }
+            ), 
+            scope_id: 0 
+        };
+        assert_eq!(res, expected);
     }
 
     #[test]
@@ -383,6 +415,36 @@ mod tests {
                 assert_eq!(v, expected);
             },
             _ => panic!("Invalid result")
+        }
+    }
+
+    #[test]
+    fn does_not_work() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+
+        let res = vm.run_code(r#"
+        return Html {
+            head: Head {
+                title: "hello"
+            },
+            body: [1, 2, 3].map((p) => {
+                return H1 {
+                    text: p
+                }
+            })
+        }"#);
+
+        println!("{:?}", res);
+        // println!("{:?}", vm.scope);
+
+        match res {
+            RunResult::Value { value, scope_id } => {
+                println!("{:#?}", value);
+                let v = vm.clone_val(scope_id, value);
+                println!("{:#?}", v);
+            },
+            _ => todo!()
         }
     }
 }

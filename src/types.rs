@@ -1,11 +1,17 @@
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct Ptr {
+	pub id: u32,
+	pub scope_id: u32
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum StackValue {
 	Int(i64),
 	Float(f64),
 	Str(String),
 	Bool(bool),
-	Ref(u32),
+	Ptr(Ptr),
 	Undef(u32),
 	Fn(u32),
 	UndefCall {
@@ -13,7 +19,7 @@ pub enum StackValue {
 		args: Vec<StackValue>
 	},
 	PropAccess {
-		obj: u32,
+		ptr: Ptr,
 		prop: u32
 	},
 	None,
@@ -32,7 +38,7 @@ impl From<&Value> for StackValue {
 			Value::Float(f) => Self::Float(*f),
 			Value::Str(s) => Self::Str(s.clone()),
 			Value::Bool(b) => Self::Bool(*b),
-			Value::Ptr(r) => Self::Ref(*r),
+			Value::Ptr(p) => Self::Ptr(p.clone()),
 			Value::UndefIdent(u) => Self::Undef(*u),
 			Value::Fn(f) => Self::Fn(*f),
 			Value::None => Self::None,
@@ -53,6 +59,12 @@ pub struct Obj {
 	pub props: Vec<ObjProp>
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ListIter {
+	pub inx: u32,
+	pub ptr: Ptr
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
@@ -60,13 +72,10 @@ pub enum Value {
     Str(String),
     Bool(bool),
     List(Vec<Value>),
-	Ptr(u32),
+	Ptr(Ptr),
 	Fn(u32),
 	Obj(Obj),
-	ListIter {
-		inx: u32,
-		id: u32
-	},
+	ListIter(ListIter),
 	UndefIdent(u32),
 	UndefCall {
 		ident: u32,
@@ -88,7 +97,7 @@ impl From<StackValue> for Value {
 			StackValue::Float(f) => Self::Float(f),
 			StackValue::Str(s) => Self::Str(s),
 			StackValue::Bool(b) => Self::Bool(b),
-			StackValue::Ref(r) => Self::Ptr(r),
+			StackValue::Ptr(p) => Self::Ptr(p),
 			StackValue::Undef(u) => Self::UndefIdent(u),
 			StackValue::Fn(f) => Self::Fn(f),
 			StackValue::None => Self::None,
