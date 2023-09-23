@@ -1,5 +1,5 @@
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Ptr {
 	pub id: u32,
 	pub scope_id: u32
@@ -253,10 +253,7 @@ pub enum ASTNode {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum RunResult {
-	Value {
-		value: Value,
-		scope_id: u32,
-	},
+	Value(Value),
 	Await {
 		stack_id: usize,
 		value: Value,

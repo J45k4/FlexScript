@@ -11,42 +11,42 @@ mod tests {
     fn test_return_number() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_plus() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 + 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(2), scope_id: 0});
+        assert_eq!(res, RunResult::Value(Value::Int(2)));
     }
 
     #[test]
     fn simple_sub() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 - 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(0), scope_id: 0});
+        assert_eq!(res, RunResult::Value(Value::Int(0)));
     }
 
     #[test]
     fn add_sub() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 + 1 - 1");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0});
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
     fn simple_comparsion() {
         let mut vm = Vm::new();
         let res = vm.run_code("return 1 == 1");
-        assert_eq!(res, RunResult::Value { value: Value::Bool(true), scope_id: 0});
+        assert_eq!(res, RunResult::Value(Value::Bool(true)));
     }
 
     #[test]
     fn simple_if_true() {
         let mut vm = Vm::new();
         let res = vm.run_code("if true { return 1 }");
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
@@ -63,7 +63,7 @@ mod tests {
         a = 1
         return a
         "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
@@ -72,19 +72,12 @@ mod tests {
         let res = vm.run_code("return [1,2,3]");
 
         match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
+            RunResult::Value(value) => {
+                assert_eq!(value, Value::List(vec![
                     Value::Int(1),
                     Value::Int(2),
                     Value::Int(3)
-                ]);
+                ]));
             },
             _ => panic!("Invalid result")
         }
@@ -100,7 +93,7 @@ mod tests {
         b = b + 1
         return b
         "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(2), scope_id: 0 });
+        assert_eq!(res, RunResult::Value(Value::Int(2)));
     }
 
     #[test]
@@ -110,7 +103,7 @@ mod tests {
         a = (a) => return a
         return a(1)
         "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 1 });
+        assert_eq!(res, RunResult::Value(Value::Int(1)));
     }
 
     #[test]
@@ -127,8 +120,8 @@ mod tests {
         new_person = a()
         return new_person
         "#);
-        let expected = RunResult::Value { 
-            value: Value::Obj(
+        let expected = RunResult::Value(
+            Value::Obj(
                 Obj { 
                     name: Some("Person".to_string()), 
                     props: vec![
@@ -138,9 +131,8 @@ mod tests {
                         }
                     ]
                 }
-            ), 
-            scope_id: 0 
-        };
+            )
+        );
         assert_eq!(res, expected);
     }
 
@@ -154,7 +146,7 @@ mod tests {
         }
         return state
         "#);
-        assert_eq!(res, RunResult::Value { value: Value::Int(-6), scope_id: 0 });
+        assert_eq!(res, RunResult::Value(Value::Int(-6)));
     }
 
     #[test]
@@ -179,7 +171,7 @@ mod tests {
         match res {
             RunResult::Await { stack_id, value } => {
                 let res = vm.cont(stack_id, Value::Int(1));
-                assert_eq!(res, RunResult::Value { value: Value::Int(1), scope_id: 0 });
+                assert_eq!(res, RunResult::Value(Value::Int(1)));
             },
             _ => panic!("Invalid result")
         }
@@ -191,23 +183,18 @@ mod tests {
         let res = vm.run_code(r#"return H1 { text: "lol" }"#);
 
         match res {
-            RunResult::Value { value, .. } => {
-                let obj = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::Obj(obj)) => obj,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(obj, &mut Obj {
-                    name: Some("H1".to_string()),
-                    props: vec![
-                        ObjProp {
-                            name: "text".to_string(),
-                            value: Value::Str("lol".to_string())
-                        }
-                    ]
-                });
+            RunResult::Value(value) => {
+                assert_eq!(value, Value::Obj(
+                    Obj {
+                        name: Some("H1".to_string()),
+                        props: vec![
+                            ObjProp {
+                                name: "text".to_string(),
+                                value: Value::Str("lol".to_string())
+                            }
+                        ]
+                    }
+                ));
             },
             _ => panic!("Invalid result")
         }
@@ -224,20 +211,15 @@ mod tests {
         "#);
 
         match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(1),
-                    Value::Int(2),
-                    Value::Int(3),
-                    Value::Int(4)
-                ]);
+            RunResult::Value(value) => {
+                assert_eq!(value, Value::List(
+                    vec![
+                        Value::Int(1),
+                        Value::Int(2),
+                        Value::Int(3),
+                        Value::Int(4)
+                    ]
+                ));
             },
             _ => panic!("Invalid result")
         }
@@ -253,18 +235,13 @@ mod tests {
         "#);
 
         match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(1),
-                    Value::Int(2),
-                ]);
+            RunResult::Value(value) => {
+                assert_eq!(value, Value::List(
+                    vec![
+                        Value::Int(1),
+                        Value::Int(2),
+                    ]
+                ));
             },
             _ => panic!("Invalid result")
         }
@@ -275,18 +252,13 @@ mod tests {
         let mut vm = Vm::new();
         let res = vm.run_code(r#"return [1,2].map(p => return p * 2)"#);
         match res {
-            RunResult::Value { value, .. } => {
-                let arr = match value {
-                    Value::Ptr(p) => match vm.get_val(0, p) {
-                        Some(Value::List(arr)) => arr,
-                        _ => panic!("Invalid result")
-                    },
-                    _ => panic!("Invalid result")
-                };
-                assert_eq!(arr, &mut vec![
-                    Value::Int(2),
-                    Value::Int(4),
-                ]);
+            RunResult::Value(value) => {
+                assert_eq!(value, Value::List( 
+                    vec![
+                        Value::Int(2),
+                        Value::Int(4),
+                    ]
+                ));
             },
             _ => panic!("Invalid result")
         }
@@ -306,8 +278,7 @@ mod tests {
 
         
         match res {
-            RunResult::Value { value, scope_id } => {
-                let v = vm.clone_val(scope_id, value);
+            RunResult::Value(value) => {
                 let expected = Value::Obj(
                     Obj {
                         name: Some("Html".to_string()),
@@ -334,7 +305,7 @@ mod tests {
                     }
                 );
 
-                assert_eq!(v, expected);
+                assert_eq!(value, expected);
             },
             _ => panic!("Invalid result")
         }
@@ -351,8 +322,7 @@ mod tests {
         }"#);
 
         match res {
-            RunResult::Value { value, scope_id } => {
-                let v = vm.clone_val(scope_id, value);
+            RunResult::Value(value) => {
                 let expected = Value::Obj(
                     Obj {
                         name: Some("Obj".to_string()),
@@ -369,7 +339,7 @@ mod tests {
                     }
                 );
 
-                assert_eq!(v, expected);
+                assert_eq!(value, expected);
             },
             _ => panic!("Invalid result")
         }
@@ -385,9 +355,7 @@ mod tests {
         }"#);
 
         match res {
-            RunResult::Value { value, scope_id } => {
-                let v = vm.clone_val(scope_id, value);
-                println!("{:?}", v);
+            RunResult::Value(value) => {
                 let expected = Value::Obj(
                     Obj {
                         name: Some("Obj".to_string()),
@@ -412,7 +380,7 @@ mod tests {
                     }
                 );
 
-                assert_eq!(v, expected);
+                assert_eq!(value, expected);
             },
             _ => panic!("Invalid result")
         }
@@ -439,10 +407,8 @@ mod tests {
         // println!("{:?}", vm.scope);
 
         match res {
-            RunResult::Value { value, scope_id } => {
+            RunResult::Value(value) => {
                 println!("{:#?}", value);
-                let v = vm.clone_val(scope_id, value);
-                println!("{:#?}", v);
             },
             _ => todo!()
         }
