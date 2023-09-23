@@ -318,6 +318,9 @@ impl Parser {
 		};
 
 		let ret = match token {
+			Token::OpenBrace => {
+				Some(self.parse_obj_props(None))
+			}
 			Token::Ident(ident) => {
 				if self.loglevel > 0 {
 					self.log(&format!("ident: {}", ident));
@@ -634,6 +637,10 @@ impl Parser {
 			self.log(&format!("name: {}", name));
 		}
 
+		self.parse_obj_props(Some(name))
+	}
+
+	fn parse_obj_props(&mut self, name: Option<String>) -> ASTNode {
 		self.expect_eat(Token::OpenBrace);
 
 		let mut props = Vec::new();
@@ -662,7 +669,7 @@ impl Parser {
 		}
 
 		let b = ObjIns {
-			name: Some(name.to_string()),
+			name: name,
 			props,
 		};
 
@@ -1987,6 +1994,36 @@ mod tests {
 					right: Box::new(ASTNode::Lit(Value::Int(2))),
 				})],
 			})],
+		})];
+
+		assert_eq!(ast, expected);
+	}
+
+	#[test]
+	fn unamed_object() {
+		let code = r#"
+			obj = {
+				x: 1,
+				y: 2,
+			}
+		"#;
+
+		let ast = Parser::new(code).set_loglevel(1).parse();
+		let expected = vec![ASTNode::Assign(Assign {
+			left: Box::new(ASTNode::Ident("obj".to_string())),
+			right: Box::new(ASTNode::ObjIns(ObjIns {
+				name: None,
+				props: vec![
+					Property {
+						name: "x".to_string(),
+						value: Box::new(ASTNode::Lit(Value::Int(1))),
+					},
+					Property {
+						name: "y".to_string(),
+						value: Box::new(ASTNode::Lit(Value::Int(2))),
+					},
+				],
+			})),
 		})];
 
 		assert_eq!(ast, expected);
