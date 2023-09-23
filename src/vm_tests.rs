@@ -389,7 +389,6 @@ mod tests {
     #[test]
     fn does_not_work() {
         let mut vm = Vm::new();
-        vm.log = 2;
 
         let res = vm.run_code(r#"
         return Html {
@@ -411,6 +410,35 @@ mod tests {
                 println!("{:#?}", value);
             },
             _ => todo!()
+        }
+    }
+
+    #[test]
+    fn anonymous_object() {
+        let mut vm = Vm::new();
+        vm.log = 2;
+        let res = vm.run_code(r#"
+        return {
+            name: "test"
+        }"#);
+
+        match res {
+            RunResult::Value(value) => {
+                let expected = Value::Obj(
+                    Obj {
+                        name: None,
+                        props: vec![
+                            ObjProp {
+                                name: "name".to_string(),
+                                value: Value::Str("test".to_string())
+                            }
+                        ]
+                    }
+                );
+
+                assert_eq!(value, expected);
+            },
+            _ => panic!("Invalid result")
         }
     }
 }

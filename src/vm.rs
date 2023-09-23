@@ -639,13 +639,7 @@ impl Vm {
                     },
                     ByteCode::LoadConst(a) => {
                         let v = self.constants[*a as usize].clone();
-                        let v = match v {
-                            Value::Int(i) => StackValue::Int(i),
-                            Value::Float(f) => StackValue::Float(f),
-                            Value::Str(s) => StackValue::Str(s),
-                            Value::Bool(b) => StackValue::Bool(b),
-                            _ => todo!("{:?}", v)
-                        };
+                        let v = StackValue::from(&v);
                         stack.push_value(v);
                     },
                     ByteCode::MakeStruct => todo!(),
@@ -796,7 +790,7 @@ impl Vm {
                         let name = match stack.pop_value() {
                             Some(v) => match v {
                                 StackValue::Str(s) => Some(s),
-                                _ => todo!("{:?}", v)
+                                _ => None
                             }, 
                             None => None
                         };
