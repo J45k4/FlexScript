@@ -942,6 +942,10 @@ impl Vm {
         self.scope.lookup(&ptr)
     }
 
+    pub fn get_code_block(&mut self, blk: u32) -> &Vec<ByteCode> {
+        &self.code_blocks[blk as usize]
+    }
+
     pub fn clone_val(&mut self, scope_id: u32, val: Value) -> Value {
         Value::None
     //     match val {
