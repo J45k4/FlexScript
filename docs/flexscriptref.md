@@ -37,6 +37,48 @@ const obj = {
 }
 ```
 
+### XML
+
+XML syntax is supported out of the box.
+```
+
+let obj = <Person>
+    <name>
+        Matti
+    </name>
+    <age>
+        1234
+    </age>
+</Person>
+
+let view = <View style={ flexDirection: "column" }>
+    <Text>
+        Hello world
+    </Text>
+</View>
+```
+
+It is possible to define XML objects with struct
+```
+struct Person {
+    name: String
+    age: u32
+    children?: [Person]
+}
+
+let obj = <Person name="Teppo" age=53>
+    <Person name="Matti" age=23>
+    <Person name="Maija" age=21>
+<Person>
+
+let ui_component = <View style={ flexDirection: "column" }>
+    <Text>
+        Hello world
+    </Text>
+</View>
+```
+
+
 ## Operators
 
 ```
@@ -211,10 +253,57 @@ let c = a * b
 
 ```
 
-## UI
+## Metaprogamming
 
+Metaprogramming on level of source code
 ```
-Box {
-    
+fn process_source(source) {
+    // Do some transformation with source
+    return source
+}
+
+@source(process_source)
+fn foo() {
+
 }
 ```
+
+Metaprogramming on level of tokens
+```
+fn process_tokens(tokens) {
+    // Do some transformation with tokens
+    return tokens
+}
+
+@tokens(process_tokens)
+fn foo() {
+
+}
+```
+
+Metaprogramming on level of AST
+```
+fn process_ast(ast) {
+    // Do some transformation with ast
+    return ast
+}
+
+@ast(process_ast)
+fn foo() {
+
+}
+```
+
+Metaprogramming on level of IR
+```
+fn process_ir(ir) {
+    // Do some transformation with ir
+    return ir
+}
+
+@ir(process_ir)
+fn foo() {
+
+}
+```
+
